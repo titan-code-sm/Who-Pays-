@@ -1427,16 +1427,19 @@ window.doRegister = async () => {
   if(username.length < 3) return showAuthError('Username troppo corto (min 3 caratteri)');
 
   try {
-    console.log('1. Controllo username...');
+    // 1. Prima crea l'account Auth (ora siamo autenticati)
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+
+    // 2. Ora possiamo fare la query su Firestore
     const uq = query(collection(db,'users'), where('username','==',username));
     const uSnap = await getDocs(uq);
-    if(!uSnap.empty) return showAuthError('Username già in uso');
+    if(!uSnap.empty) {
+      // Username già in uso — elimina l'account appena creato e mostra errore
+      await cred.user.delete();
+      return showAuthError('Username già in uso');
+    }
 
-    console.log('2. Creo account Auth...');
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    console.log('3. Auth OK, uid:', cred.user.uid);
-
-    console.log('4. Scrivo profilo su Firestore...');
+    // 3. Scrivi il profilo
     await setDoc(doc(db,'users', cred.user.uid), {
       uid: cred.user.uid,
       name,
@@ -1447,13 +1450,15 @@ window.doRegister = async () => {
       sentRequests: [],
       createdAt: serverTimestamp()
     });
-    console.log('5. Profilo scritto OK!');
 
   } catch(e) {
-    console.error('ERRORE COMPLETO:', e);
-    console.error('Codice:', e.code);
-    console.error('Messaggio:', e.message);
-    showAuthError('Errore: ' + e.code + ' — ' + e.message);
+    console.error('ERRORE:', e);
+    const msgs = {
+      'auth/email-already-in-use': 'Email già in uso',
+      'auth/weak-password': 'Password troppo debole (min 6 caratteri)',
+      'auth/invalid-email': 'Email non valida'
+    };
+    showAuthError(msgs[e.code] || 'Errore: ' + e.message);
   }
 };
 
