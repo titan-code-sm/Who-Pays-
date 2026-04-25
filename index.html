@@ -1,0 +1,2217 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Who Pays?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --surface3: #22223a;
+  --border: rgba(255,255,255,0.07);
+  --accent: #f5c842;
+  --accent2: #ff6b6b;
+  --accent3: #6bffb8;
+  --accent4: #6b9eff;
+  --text: #f0f0f8;
+  --text2: #9898b8;
+  --text3: #5a5a7a;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 40px rgba(0,0,0,0.5);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 10px; }
+
+/* ── AUTH SCREEN ── */
+#auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+#auth-screen::before {
+  content: '';
+  position: absolute;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(245,200,66,0.08) 0%, transparent 70%);
+  top: -100px; left: -100px;
+  pointer-events: none;
+}
+#auth-screen::after {
+  content: '';
+  position: absolute;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(107,158,255,0.06) 0%, transparent 70%);
+  bottom: -50px; right: -50px;
+  pointer-events: none;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 48px;
+  width: 420px;
+  max-width: 95vw;
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
+  animation: fadeUp 0.5s ease;
+}
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 36px;
+}
+.logo-icon {
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg, var(--accent), #e6a800);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 4px 20px rgba(245,200,66,0.3);
+}
+.app-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.app-name span { color: var(--accent); }
+.auth-tabs {
+  display: flex;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 28px;
+  gap: 4px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.auth-tab.active {
+  background: var(--surface3);
+  color: var(--text);
+}
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+.form-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  transition: border-color 0.2s;
+  outline: none;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text3); }
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent), #e6a800);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #0a0a0f;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+  margin-top: 8px;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(245,200,66,0.35); }
+.btn-primary:active { transform: translateY(0); }
+.auth-error {
+  background: rgba(255,107,107,0.12);
+  border: 1px solid rgba(255,107,107,0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--accent2);
+  margin-bottom: 16px;
+  display: none;
+}
+
+/* ── APP LAYOUT ── */
+#app { display: none; height: 100vh; flex-direction: row; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 100;
+  overflow-y: auto;
+}
+.sidebar-header {
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.sidebar-logo .logo-icon { width: 38px; height: 38px; font-size: 18px; border-radius: 10px; }
+.sidebar-logo .app-name { font-size: 18px; }
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent4), #4a7be0);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  flex-shrink: 0;
+}
+.avatar.sm { width: 28px; height: 28px; font-size: 11px; }
+.avatar.lg { width: 48px; height: 48px; font-size: 18px; }
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 14px; font-weight: 500; truncate; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-handle { font-size: 11px; color: var(--text2); font-family: 'DM Mono', monospace; }
+.sidebar-nav { padding: 16px 12px; flex: 1; }
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 0 8px;
+  margin: 16px 0 8px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text2);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: rgba(245,200,66,0.12); color: var(--accent); }
+.nav-item .nav-icon { font-size: 17px; width: 20px; text-align: center; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent2);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+.sidebar-groups { padding: 0 12px; flex: 1; overflow-y: auto; }
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text2);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.group-item:hover { background: var(--surface2); color: var(--text); }
+.group-item.active { background: var(--surface2); color: var(--text); }
+.group-avatar {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.sidebar-footer {
+  padding: 16px 12px;
+  border-top: 1px solid var(--border);
+}
+.btn-logout {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-logout:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── MAIN CONTENT ── */
+.main {
+  margin-left: 260px;
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.main-content { padding: 32px; max-width: 1100px; }
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+.page-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.page-subtitle { font-size: 14px; color: var(--text2); margin-top: 2px; }
+.topbar-actions { display: flex; gap: 10px; align-items: center; }
+.btn-secondary {
+  padding: 10px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 7px;
+}
+.btn-secondary:hover { border-color: rgba(255,255,255,0.15); background: var(--surface2); }
+.btn-accent {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent), #e6a800);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #0a0a0f;
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; gap: 7px;
+}
+.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,200,66,0.3); }
+
+/* ── STAT CARDS ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  opacity: 0.06;
+}
+.stat-card.green::before { background: var(--accent3); right: -20px; top: -20px; }
+.stat-card.red::before { background: var(--accent2); right: -20px; top: -20px; }
+.stat-card.blue::before { background: var(--accent4); right: -20px; top: -20px; }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+.stat-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.stat-card.green .stat-value { color: var(--accent3); }
+.stat-card.red .stat-value { color: var(--accent2); }
+.stat-card.blue .stat-value { color: var(--accent4); }
+.stat-change { font-size: 12px; color: var(--text2); margin-top: 6px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.card-body { padding: 20px 24px; }
+
+/* ── TWO COL ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+/* ── ACTIVITY ITEM ── */
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  animation: fadeIn 0.3s ease;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.activity-meta { flex: 1; min-width: 0; }
+.activity-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+.activity-sub { font-size: 12px; color: var(--text2); }
+.activity-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.amount-pos { color: var(--accent3); }
+.amount-neg { color: var(--accent2); }
+.amount-neutral { color: var(--text2); }
+
+/* ── GROUP CARD ── */
+.group-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.group-card:hover { border-color: rgba(245,200,66,0.3); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.group-card-emoji { font-size: 32px; margin-bottom: 12px; }
+.group-card-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.group-card-members { font-size: 12px; color: var(--text2); margin-bottom: 14px; }
+.group-card-balance { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; }
+.group-card-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.member-avatars { display: flex; gap: -6px; margin-bottom: 10px; }
+.member-avatars .avatar { border: 2px solid var(--surface); margin-right: -8px; }
+
+/* ── FRIENDS ── */
+.friend-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.friend-item:last-child { border-bottom: none; }
+.friend-info { flex: 1; }
+.friend-name { font-size: 14px; font-weight: 500; }
+.friend-handle { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; }
+.friend-balance { text-align: right; }
+.balance-label { font-size: 11px; color: var(--text2); }
+.balance-amount { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; }
+
+/* ── EXPENSE LIST ── */
+.expense-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 8px;
+  padding-left: 8px; padding-right: 8px;
+}
+.expense-item:hover { background: var(--surface2); }
+.expense-item:last-child { border-bottom: none; }
+.expense-date { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; width: 45px; text-align: center; line-height: 1.3; }
+.expense-info { flex: 1; }
+.expense-title { font-size: 14px; font-weight: 500; }
+.expense-payer { font-size: 12px; color: var(--text2); }
+.expense-amounts { text-align: right; }
+.expense-total { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; }
+.expense-share { font-size: 11px; color: var(--text2); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  width: 500px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  transform: translateY(20px);
+  transition: transform 0.3s ease;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-header {
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+.modal-close {
+  width: 32px; height: 32px;
+  background: var(--surface2);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover { background: var(--surface3); color: var(--text); }
+.modal-body { padding: 24px 28px; }
+.modal-footer {
+  padding: 20px 28px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ── SPLIT OPTIONS ── */
+.split-options { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.split-opt {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+.split-opt.active { border-color: var(--accent); color: var(--accent); background: rgba(245,200,66,0.08); }
+
+/* ── NOTE ITEM ── */
+.note-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 10px;
+  animation: fadeUp 0.3s ease;
+}
+.note-header { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
+.note-author { font-size: 12px; font-weight: 500; color: var(--accent); }
+.note-time { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
+.note-text { font-size: 14px; line-height: 1.6; color: var(--text2); }
+
+/* ── NOTIFICATION ── */
+.notif-item {
+  display: flex; gap: 12px; padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.notif-item:hover { background: var(--surface2); padding-left: 8px; border-radius: 8px; }
+.notif-item:last-child { border-bottom: none; }
+.notif-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.notif-dot.read { background: var(--text3); }
+.notif-content { flex: 1; }
+.notif-text { font-size: 14px; margin-bottom: 3px; }
+.notif-time { font-size: 11px; color: var(--text3); }
+
+/* ── MEMBER ROW ── */
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.member-row:last-child { border-bottom: none; }
+.member-role { font-size: 11px; color: var(--text3); }
+.member-balance-row { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 13px; }
+
+/* ── TABS ── */
+.tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: var(--radius-sm); margin-bottom: 24px; }
+.tab-btn {
+  flex: 1; padding: 10px; border: none; background: transparent;
+  color: var(--text2); border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  transition: all 0.2s;
+}
+.tab-btn.active { background: var(--surface3); color: var(--text); }
+
+/* ── EMPTY STATE ── */
+.empty {
+  text-align: center; padding: 60px 20px;
+  color: var(--text3);
+}
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 500; color: var(--text2); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; }
+
+/* ── CHIPS ── */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 10px;
+  font-size: 12px; color: var(--text2);
+}
+.chip.green { background: rgba(107,255,184,0.1); border-color: rgba(107,255,184,0.3); color: var(--accent3); }
+.chip.red { background: rgba(255,107,107,0.1); border-color: rgba(255,107,107,0.3); color: var(--accent2); }
+
+/* ── BALANCE BAR ── */
+.balance-bar {
+  height: 6px;
+  background: var(--surface3);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.balance-fill {
+  height: 100%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--accent3), #00e87a);
+  transition: width 0.5s ease;
+}
+
+/* ── SEARCH ── */
+.search-box {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 16px; margin-bottom: 16px;
+}
+.search-box input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px;
+}
+.search-box input::placeholder { color: var(--text3); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── LOADER ── */
+.loader {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.loading-screen {
+  display: flex; align-items: center; justify-content: center;
+  height: 100vh; background: var(--bg);
+}
+
+/* ── SELECT ── */
+select.form-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239898b8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+select.form-input option { background: var(--surface2); color: var(--text); }
+
+/* ── SECTION DIVIDER ── */
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+
+/* ── TOAST ── */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-size: 14px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  animation: fadeUp 0.3s ease;
+  display: flex; align-items: center; gap: 10px;
+  max-width: 300px;
+}
+.toast.success { border-left: 3px solid var(--accent3); }
+.toast.error { border-left: 3px solid var(--accent2); }
+.toast.info { border-left: 3px solid var(--accent4); }
+
+/* ── PROFILE PAGE ── */
+.profile-header {
+  background: linear-gradient(135deg, var(--surface), var(--surface2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  display: flex; align-items: center; gap: 24px;
+  margin-bottom: 24px;
+}
+.profile-stats { display: flex; gap: 32px; margin-top: 8px; }
+.profile-stat { text-align: center; }
+.profile-stat-value { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+.profile-stat-label { font-size: 11px; color: var(--text2); }
+
+/* ── GROUP DETAIL ── */
+.breadcrumb {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text2); margin-bottom: 24px;
+}
+.breadcrumb a { color: var(--text2); text-decoration: none; cursor: pointer; }
+.breadcrumb a:hover { color: var(--text); }
+.breadcrumb span { color: var(--text3); }
+
+/* ── CATEGORY BADGE ── */
+.cat-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; padding: 3px 8px; border-radius: 6px;
+  background: var(--surface3); color: var(--text2);
+}
+
+/* ── SETTLE UP BTN ── */
+.btn-settle {
+  padding: 8px 14px;
+  background: rgba(107,255,184,0.15);
+  border: 1px solid rgba(107,255,184,0.3);
+  border-radius: 8px;
+  color: var(--accent3);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-settle:hover { background: rgba(107,255,184,0.25); }
+
+/* ── INVITE PENDING ── */
+.invite-pending {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px;
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+/* responsive */
+@media (max-width: 768px) {
+  .sidebar { width: 0; overflow: hidden; }
+  .main { margin-left: 0; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen" class="loading-screen">
+  <div style="text-align:center">
+    <div class="logo-icon" style="width:56px;height:56px;font-size:28px;border-radius:16px;margin:0 auto 16px;">💸</div>
+    <div class="loader" style="margin:0 auto;"></div>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" style="display:none">
+  <div class="auth-card">
+    <div class="app-logo">
+      <div class="logo-icon">💸</div>
+      <div>
+        <div class="app-name">Who <span>Pays?</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px;">Dividi le spese, semplicemente.</div>
+      </div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Accedi</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Registrati</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <!-- Login -->
+    <div id="login-form">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="login-email" placeholder="la@tua.email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="login-pass" placeholder="••••••••">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Accedi →</button>
+    </div>
+    <!-- Register -->
+    <div id="register-form" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <input class="form-input" type="text" id="reg-name" placeholder="Mario Rossi">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" type="text" id="reg-username" placeholder="@mario" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="reg-email" placeholder="la@tua.email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="reg-pass" placeholder="Minimo 6 caratteri">
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Crea account →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="logo-icon">💸</div>
+        <div class="app-name">Who <span>Pays?</span></div>
+      </div>
+      <div class="user-pill">
+        <div class="avatar" id="sidebar-avatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebar-name">—</div>
+          <div class="user-handle" id="sidebar-handle">@—</div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-label">Principale</div>
+      <button class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+        <span class="nav-icon">🏠</span> Dashboard
+      </button>
+      <button class="nav-item" onclick="showPage('friends')" id="nav-friends">
+        <span class="nav-icon">👥</span> Amici
+        <span class="nav-badge" id="friends-badge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" onclick="showPage('notifications')" id="nav-notifications">
+        <span class="nav-icon">🔔</span> Notifiche
+        <span class="nav-badge" id="notif-badge" style="display:none">0</span>
+      </button>
+      <div class="nav-section-label">I miei conti</div>
+      <div id="sidebar-groups">
+        <div style="font-size:12px;color:var(--text3);padding:8px 12px;">Nessun conto ancora</div>
+      </div>
+      <button class="nav-item" onclick="openModal('modal-new-group')">
+        <span class="nav-icon">➕</span> Nuovo conto
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="nav-item" onclick="showPage('profile')" id="nav-profile" style="margin-bottom:8px">
+        <span class="nav-icon">👤</span> Profilo
+      </button>
+      <button class="btn-logout" onclick="doLogout()">⬅ Esci</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="main-content">
+
+      <!-- ── DASHBOARD ── -->
+      <div id="page-dashboard">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Dashboard 🏠</div>
+            <div class="page-subtitle" id="dashboard-greeting">Buongiorno!</div>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn-secondary" onclick="openModal('modal-add-expense')">
+              ➕ Aggiungi spesa
+            </button>
+            <button class="btn-accent" onclick="openModal('modal-new-group')">
+              📂 Nuovo conto
+            </button>
+          </div>
+        </div>
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card green">
+            <div class="stat-label">Totale crediti</div>
+            <div class="stat-value" id="stat-credits">€0</div>
+            <div class="stat-change">Quanto ti devono</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">Totale debiti</div>
+            <div class="stat-value" id="stat-debits">€0</div>
+            <div class="stat-change">Quanto devi agli altri</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-label">Saldo netto</div>
+            <div class="stat-value" id="stat-net">€0</div>
+            <div class="stat-change">Bilancio complessivo</div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Attività recente</div>
+              <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="showPage('dashboard')">Vedi tutto</button>
+            </div>
+            <div class="card-body" id="recent-activity">
+              <div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Nessuna attività</div><div class="empty-sub">Le spese aggiunte appariranno qui</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">I miei conti</div>
+              <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="openModal('modal-new-group')">+ Nuovo</button>
+            </div>
+            <div class="card-body" id="groups-overview">
+              <div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Nessun conto</div><div class="empty-sub">Crea un conto per iniziare a dividere le spese</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <div class="card-title">Bilanci con gli amici</div>
+          </div>
+          <div class="card-body" id="friend-balances">
+            <div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Aggiungi amici</div><div class="empty-sub">Inizia ad aggiungere amici per vedere i bilanci</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── GROUPS LIST ── -->
+      <div id="page-groups" style="display:none">
+        <div class="topbar">
+          <div><div class="page-title">I miei conti 📂</div><div class="page-subtitle">Gestisci tutti i tuoi conti condivisi</div></div>
+          <div class="topbar-actions">
+            <button class="btn-accent" onclick="openModal('modal-new-group')">+ Nuovo conto</button>
+          </div>
+        </div>
+        <div id="groups-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>
+      </div>
+
+      <!-- ── GROUP DETAIL ── -->
+      <div id="page-group-detail" style="display:none">
+        <div class="breadcrumb">
+          <a onclick="showPage('dashboard')">🏠 Dashboard</a>
+          <span>›</span>
+          <span id="gd-breadcrumb">Conto</span>
+        </div>
+        <div class="topbar">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div id="gd-emoji" style="font-size:42px"></div>
+            <div>
+              <div class="page-title" id="gd-name"></div>
+              <div class="page-subtitle" id="gd-members-count"></div>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn-secondary" onclick="openInviteModal()">👤+ Invita</button>
+            <button class="btn-secondary" onclick="openNoteModal()">📝 Nota</button>
+            <button class="btn-accent" onclick="openExpenseModal()">+ Spesa</button>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchGroupTab('expenses')">💳 Spese</button>
+          <button class="tab-btn" onclick="switchGroupTab('members')">👥 Membri</button>
+          <button class="tab-btn" onclick="switchGroupTab('balances')">⚖️ Bilanci</button>
+          <button class="tab-btn" onclick="switchGroupTab('notes')">📝 Note</button>
+        </div>
+        <div id="gd-expenses"><div class="card"><div class="card-body" id="gd-expense-list"><div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Nessuna spesa</div><div class="empty-sub">Aggiungi la prima spesa al conto</div></div></div></div></div>
+        <div id="gd-members" style="display:none"><div class="card"><div class="card-body" id="gd-member-list"></div></div></div>
+        <div id="gd-balances" style="display:none"><div class="card"><div class="card-body" id="gd-balance-list"></div></div></div>
+        <div id="gd-notes" style="display:none"><div id="gd-note-list"></div></div>
+      </div>
+
+      <!-- ── FRIENDS ── -->
+      <div id="page-friends" style="display:none">
+        <div class="topbar">
+          <div><div class="page-title">Amici 👥</div><div class="page-subtitle">Le tue connessioni su Who Pays?</div></div>
+          <div class="topbar-actions">
+            <button class="btn-accent" onclick="openModal('modal-add-friend')">+ Aggiungi amico</button>
+          </div>
+        </div>
+        <div class="search-box">
+          <span>🔍</span>
+          <input placeholder="Cerca amici..." oninput="filterFriends(this.value)">
+        </div>
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchFriendsTab('friends')">Amici</button>
+          <button class="tab-btn" onclick="switchFriendsTab('requests')">Richieste <span id="req-count" style="color:var(--accent)"></span></button>
+          <button class="tab-btn" onclick="switchFriendsTab('sent')">Inviti inviati</button>
+        </div>
+        <div class="card">
+          <div class="card-body" id="friends-list"><div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico ancora</div><div class="empty-sub">Inizia aggiungendo i tuoi amici</div></div></div>
+        </div>
+      </div>
+
+      <!-- ── NOTIFICATIONS ── -->
+      <div id="page-notifications" style="display:none">
+        <div class="topbar">
+          <div><div class="page-title">Notifiche 🔔</div><div class="page-subtitle">Aggiornamenti e attività recenti</div></div>
+          <div class="topbar-actions">
+            <button class="btn-secondary" onclick="markAllRead()">✓ Segna tutto come letto</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" id="notif-list">
+            <div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">Nessuna notifica</div><div class="empty-sub">Sei in pari con tutto!</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PROFILE ── -->
+      <div id="page-profile" style="display:none">
+        <div class="page-title" style="margin-bottom:24px">Il mio profilo 👤</div>
+        <div class="profile-header">
+          <div class="avatar lg" id="profile-avatar">?</div>
+          <div style="flex:1">
+            <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800" id="profile-name">—</div>
+            <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--accent);margin:4px 0" id="profile-handle">@—</div>
+            <div style="font-size:13px;color:var(--text2)" id="profile-email">—</div>
+            <div class="profile-stats" id="profile-stats">
+              <div class="profile-stat"><div class="profile-stat-value" id="ps-groups">0</div><div class="profile-stat-label">Conti</div></div>
+              <div class="profile-stat"><div class="profile-stat-value" id="ps-friends">0</div><div class="profile-stat-label">Amici</div></div>
+              <div class="profile-stat"><div class="profile-stat-value" id="ps-expenses">0</div><div class="profile-stat-label">Spese</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Modifica profilo</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Nome completo</label>
+              <input class="form-input" type="text" id="edit-name" placeholder="Il tuo nome">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input class="form-input" type="text" id="edit-username" placeholder="@username" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button class="btn-accent" onclick="saveProfile()">💾 Salva</button>
+              <button class="btn-secondary" onclick="openModal('modal-change-pass')">🔑 Cambia password</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ────── MODALS ────── -->
+
+<!-- New Group -->
+<div class="modal-overlay" id="modal-new-group">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📂 Nuovo conto</div>
+      <button class="modal-close" onclick="closeModal('modal-new-group')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nome del conto</label>
+        <input class="form-input" type="text" id="new-group-name" placeholder="es. Vacanza in Sardegna">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select class="form-input" id="new-group-category">
+          <option value="✈️">✈️ Viaggio</option>
+          <option value="🏠">🏠 Casa</option>
+          <option value="🎉">🎉 Festa / Evento</option>
+          <option value="🍕">🍕 Cibo</option>
+          <option value="🏋️">🏋️ Sport</option>
+          <option value="💼">💼 Lavoro</option>
+          <option value="📦">📦 Altro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrizione (opzionale)</label>
+        <input class="form-input" type="text" id="new-group-desc" placeholder="Breve descrizione...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valuta</label>
+        <select class="form-input" id="new-group-currency">
+          <option value="€">€ Euro</option>
+          <option value="$">$ Dollaro USA</option>
+          <option value="£">£ Sterlina</option>
+          <option value="CHF">CHF Franco Svizzero</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-new-group')">Annulla</button>
+      <button class="btn-accent" onclick="createGroup()">Crea conto ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Expense -->
+<div class="modal-overlay" id="modal-add-expense">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">💳 Aggiungi spesa</div>
+      <button class="modal-close" onclick="closeModal('modal-add-expense')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Descrizione</label>
+        <input class="form-input" type="text" id="exp-title" placeholder="es. Cena al ristorante">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Importo (€)</label>
+        <input class="form-input" type="number" id="exp-amount" placeholder="0.00" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Conto</label>
+        <select class="form-input" id="exp-group"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Chi ha pagato?</label>
+        <select class="form-input" id="exp-payer"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoria</label>
+        <select class="form-input" id="exp-category">
+          <option value="🍕">🍕 Cibo & Bevande</option>
+          <option value="🏨">🏨 Alloggio</option>
+          <option value="✈️">✈️ Trasporto</option>
+          <option value="🎭">🎭 Entertainment</option>
+          <option value="🛒">🛒 Spesa</option>
+          <option value="💊">💊 Salute</option>
+          <option value="📦">📦 Altro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Divisione</label>
+        <div class="split-options">
+          <button class="split-opt active" onclick="setSplitType('equal')">⚖️ Uguale</button>
+          <button class="split-opt" onclick="setSplitType('percentage')">% Percentuale</button>
+          <button class="split-opt" onclick="setSplitType('custom')">✏️ Personalizzato</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data</label>
+        <input class="form-input" type="date" id="exp-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionale)</label>
+        <input class="form-input" type="text" id="exp-note" placeholder="Aggiungi una nota...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-add-expense')">Annulla</button>
+      <button class="btn-accent" onclick="addExpense()">Aggiungi ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Friend -->
+<div class="modal-overlay" id="modal-add-friend">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">👥 Aggiungi amico</div>
+      <button class="modal-close" onclick="closeModal('modal-add-friend')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username o Email</label>
+        <input class="form-input" type="text" id="friend-search-input" placeholder="@username o email@esempio.com">
+      </div>
+      <div id="friend-search-result" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-add-friend')">Annulla</button>
+      <button class="btn-accent" onclick="searchAndAddFriend()">🔍 Cerca e invia richiesta</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invite to Group -->
+<div class="modal-overlay" id="modal-invite-group">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">👤+ Invita al conto</div>
+      <button class="modal-close" onclick="closeModal('modal-invite-group')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Cerca per username o email</label>
+        <input class="form-input" type="text" id="invite-search-input" placeholder="@username o email">
+      </div>
+      <div id="invite-search-result" style="margin-top:12px"></div>
+      <div id="invite-friends-list" style="margin-top:16px">
+        <div class="form-label" style="margin-bottom:8px">Oppure scegli tra i tuoi amici:</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-invite-group')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Note -->
+<div class="modal-overlay" id="modal-add-note">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📝 Aggiungi nota</div>
+      <button class="modal-close" onclick="closeModal('modal-add-note')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nota</label>
+        <textarea class="form-input" id="note-text" rows="4" placeholder="Scrivi una nota per lo storico del conto..." style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-add-note')">Annulla</button>
+      <button class="btn-accent" onclick="addNote()">Aggiungi nota ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settle Up -->
+<div class="modal-overlay" id="modal-settle">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✅ Salda il debito</div>
+      <button class="modal-close" onclick="closeModal('modal-settle')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="settle-info" style="text-align:center;padding:20px 0">
+        <div style="font-size:48px;margin-bottom:12px">💸</div>
+        <div style="font-size:18px;font-weight:500;margin-bottom:8px" id="settle-text">—</div>
+        <div style="font-size:13px;color:var(--text2)">Conferma il pagamento per aggiornare i bilanci</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-settle')">Annulla</button>
+      <button class="btn-accent" onclick="confirmSettle()">Conferma pagamento ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password -->
+<div class="modal-overlay" id="modal-change-pass">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🔑 Cambia password</div>
+      <button class="modal-close" onclick="closeModal('modal-change-pass')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nuova password</label>
+        <input class="form-input" type="password" id="new-pass" placeholder="Minimo 6 caratteri">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Conferma password</label>
+        <input class="form-input" type="password" id="conf-pass" placeholder="Ripeti la password">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-change-pass')">Annulla</button>
+      <button class="btn-accent" onclick="changePassword()">Aggiorna ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ────── FIREBASE ────── -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, collection, query, where, orderBy, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCJEsBOf-2UnMcJVOzYquOSUk3JRKjTUQ0",
+  authDomain: "who-pays-d415e.firebaseapp.com",
+  projectId: "who-pays-d415e",
+  storageBucket: "who-pays-d415e.firebasestorage.app",
+  messagingSenderId: "970598646210",
+  appId: "1:970598646210:web:dc6ca7e9095620f591165b",
+  measurementId: "G-6DHM88852Z"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ── STATE ──
+let currentUser = null;
+let userProfile = null;
+let myGroups = [];
+let myFriends = [];
+let activeGroup = null;
+let currentGroupTab = 'expenses';
+let currentFriendsTab = 'friends';
+let settleData = null;
+let splitType = 'equal';
+let unsubscribers = [];
+
+// ── HELPERS ──
+window.toast = (msg, type='info') => {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  const icons = {success:'✅', error:'❌', info:'ℹ️'};
+  t.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(), 4000);
+};
+
+const fmt = (n) => {
+  const v = parseFloat(n)||0;
+  return (v>=0?'+':'') + '€' + Math.abs(v).toFixed(2);
+};
+const fmtAmt = (n) => '€' + parseFloat(n||0).toFixed(2);
+
+const initials = (name='?') => name.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+const ts2date = (ts) => {
+  if(!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('it-IT', {day:'2-digit', month:'short'});
+};
+
+const tsShort = (ts) => {
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('it-IT', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+};
+
+// ── MODAL ──
+window.openModal = (id) => { document.getElementById(id).classList.add('open'); };
+window.closeModal = (id) => { document.getElementById(id).classList.remove('open'); };
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
+
+// ── AUTH TAB ──
+window.switchAuthTab = (tab) => {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.auth-tab')[tab==='login'?0:1].classList.add('active');
+  document.getElementById('login-form').style.display = tab==='login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab==='register' ? '' : 'none';
+  document.getElementById('auth-error').style.display = 'none';
+};
+
+const showAuthError = (msg) => {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+};
+
+// ── LOGIN ──
+window.doLogin = async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if(!email||!pass) return showAuthError('Inserisci email e password');
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    const msgs = { 'auth/user-not-found':'Utente non trovato', 'auth/wrong-password':'Password errata', 'auth/invalid-email':'Email non valida', 'auth/invalid-credential':'Credenziali non valide' };
+    showAuthError(msgs[e.code]||'Errore di accesso: '+e.message);
+  }
+};
+
+// ── REGISTER ──
+window.doRegister = async () => {
+  const name = document.getElementById('reg-name').value.trim();
+  const username = document.getElementById('reg-username').value.trim().toLowerCase();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  if(!name||!username||!email||!pass) return showAuthError('Compila tutti i campi');
+  if(username.length < 3) return showAuthError('Username troppo corto (min 3 caratteri)');
+  try {
+    // Check username unique
+    const uq = query(collection(db,'users'), where('username','==',username));
+    const uSnap = await getDocs(uq);
+    if(!uSnap.empty) return showAuthError('Username già in uso');
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await setDoc(doc(db,'users',cred.user.uid), {
+      uid: cred.user.uid, name, username, email,
+      friends:[], friendRequests:[], sentRequests:[],
+      createdAt: serverTimestamp()
+    });
+  } catch(e) {
+    const msgs = { 'auth/email-already-in-use':'Email già in uso', 'auth/weak-password':'Password troppo debole (min 6 caratteri)', 'auth/invalid-email':'Email non valida' };
+    showAuthError(msgs[e.code]||'Errore: '+e.message);
+  }
+};
+
+// ── LOGOUT ──
+window.doLogout = async () => { unsubAll(); await signOut(auth); };
+
+const unsubAll = () => { unsubscribers.forEach(u=>u()); unsubscribers=[]; };
+
+// ── AUTH STATE ──
+onAuthStateChanged(auth, async (user) => {
+  document.getElementById('loading-screen').style.display = 'none';
+  if(user) {
+    currentUser = user;
+    await loadUserProfile();
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  } else {
+    currentUser = null; userProfile = null;
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+const loadUserProfile = async () => {
+  const snap = await getDoc(doc(db,'users',currentUser.uid));
+  userProfile = snap.exists() ? snap.data() : { name: currentUser.email, username: 'user', email: currentUser.email };
+};
+
+const initApp = () => {
+  setupSidebar();
+  setupDashboard();
+  subscribeGroups();
+  subscribeNotifications();
+  setExpenseDate();
+  showPage('dashboard');
+};
+
+const setupSidebar = () => {
+  const ini = initials(userProfile.name);
+  document.getElementById('sidebar-avatar').textContent = ini;
+  document.getElementById('sidebar-name').textContent = userProfile.name;
+  document.getElementById('sidebar-handle').textContent = '@'+userProfile.username;
+  document.getElementById('profile-avatar').textContent = ini;
+  document.getElementById('profile-name').textContent = userProfile.name;
+  document.getElementById('profile-handle').textContent = '@'+userProfile.username;
+  document.getElementById('profile-email').textContent = userProfile.email||currentUser.email;
+  document.getElementById('edit-name').value = userProfile.name;
+  document.getElementById('edit-username').value = userProfile.username;
+  const h = new Date().getHours();
+  document.getElementById('dashboard-greeting').textContent =
+    h<12 ? `Buongiorno, ${userProfile.name.split(' ')[0]}! ☀️` :
+    h<18 ? `Buon pomeriggio, ${userProfile.name.split(' ')[0]}! 🌤` :
+    `Buonasera, ${userProfile.name.split(' ')[0]}! 🌙`;
+};
+
+const setExpenseDate = () => {
+  document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+};
+
+// ── PAGES ──
+const pages = ['dashboard','groups','group-detail','friends','notifications','profile'];
+window.showPage = (page) => {
+  pages.forEach(p => { const el = document.getElementById('page-'+p); if(el) el.style.display='none'; });
+  const el = document.getElementById('page-'+page);
+  if(el) { el.style.display=''; el.style.animation='fadeUp 0.4s ease'; }
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const nav = document.getElementById('nav-'+page);
+  if(nav) nav.classList.add('active');
+  if(page==='friends') loadFriendsPage();
+  if(page==='profile') loadProfilePage();
+  if(page==='notifications') loadNotificationsPage();
+};
+
+// ── GROUPS SUBSCRIPTION ──
+const subscribeGroups = () => {
+  const q = query(collection(db,'groups'), where('members','array-contains', currentUser.uid));
+  const unsub = onSnapshot(q, snap => {
+    myGroups = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderSidebarGroups();
+    renderDashboard();
+  });
+  unsubscribers.push(unsub);
+};
+
+const renderSidebarGroups = () => {
+  const el = document.getElementById('sidebar-groups');
+  if(!myGroups.length) { el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 12px;">Nessun conto ancora</div>'; return; }
+  el.innerHTML = myGroups.map(g=>`
+    <div class="group-item ${activeGroup&&activeGroup.id===g.id?'active':''}" onclick="openGroup('${g.id}')">
+      <div class="group-avatar">${g.emoji||'📂'}</div>
+      <span style="flex:1;truncate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</span>
+    </div>`).join('');
+};
+
+// ── DASHBOARD ──
+window.renderDashboard = async () => {
+  renderGroupsOverview();
+  await calculateTotals();
+  await renderFriendBalances();
+  await renderRecentActivity();
+};
+
+const renderGroupsOverview = () => {
+  const el = document.getElementById('groups-overview');
+  if(!myGroups.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Nessun conto</div><div class="empty-sub">Crea un conto per iniziare</div></div>'; return; }
+  el.innerHTML = myGroups.slice(0,4).map(g=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openGroup('${g.id}')">
+      <span style="font-size:22px">${g.emoji||'📂'}</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:500">${g.name}</div>
+        <div style="font-size:12px;color:var(--text2)">${g.memberNames?g.memberNames.join(', ').slice(0,30)+'...':'—'}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">›</div>
+    </div>`).join('');
+};
+
+const calculateTotals = async () => {
+  let totalCredits = 0, totalDebits = 0;
+  for(const g of myGroups) {
+    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), where('settled','==',false)));
+    eSnap.forEach(ed => {
+      const e = ed.data();
+      const perPerson = e.amount / (e.members?.length||1);
+      if(e.paidBy===currentUser.uid) {
+        const others = (e.members||[]).filter(m=>m!==currentUser.uid);
+        totalCredits += perPerson * others.length;
+      } else if((e.members||[]).includes(currentUser.uid)) {
+        totalDebits += perPerson;
+      }
+    });
+  }
+  const net = totalCredits - totalDebits;
+  document.getElementById('stat-credits').textContent = fmtAmt(totalCredits);
+  document.getElementById('stat-debits').textContent = fmtAmt(totalDebits);
+  document.getElementById('stat-net').textContent = (net>=0?'+':'')+fmtAmt(net);
+  document.getElementById('stat-net').style.color = net>=0 ? 'var(--accent3)' : 'var(--accent2)';
+};
+
+const renderRecentActivity = async () => {
+  const el = document.getElementById('recent-activity');
+  let activities = [];
+  for(const g of myGroups) {
+    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), orderBy('createdAt','desc')));
+    eSnap.forEach(ed => activities.push({...ed.data(), id:ed.id, groupName:g.name, groupId:g.id}));
+  }
+  activities.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  activities = activities.slice(0,8);
+  if(!activities.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Nessuna attività</div><div class="empty-sub">Le spese appariranno qui</div></div>'; return; }
+  el.innerHTML = activities.map(a=>{
+    const perP = a.amount/(a.members?.length||1);
+    const isMine = a.paidBy===currentUser.uid;
+    const isInvolved = (a.members||[]).includes(currentUser.uid);
+    const balance = isMine ? perP*((a.members||[]).filter(m=>m!==currentUser.uid).length) : isInvolved ? -perP : 0;
+    return `<div class="activity-item">
+      <div class="activity-icon">${a.category||'💳'}</div>
+      <div class="activity-meta">
+        <div class="activity-title">${a.title}</div>
+        <div class="activity-sub">${a.groupName} · ${ts2date(a.createdAt)}</div>
+      </div>
+      <div class="activity-amount ${balance>0?'amount-pos':balance<0?'amount-neg':'amount-neutral'}">${fmtAmt(a.amount)}</div>
+    </div>`;
+  }).join('');
+};
+
+const renderFriendBalances = async () => {
+  const el = document.getElementById('friend-balances');
+  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
+  const uData = uSnap.data()||{};
+  const friendIds = uData.friends||[];
+  if(!friendIds.length) { el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div><div class="empty-sub">Aggiungi amici per vedere i bilanci</div></div>'; return; }
+  const balances = {};
+  friendIds.forEach(fid=>balances[fid]=0);
+  for(const g of myGroups) {
+    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), where('settled','==',false)));
+    eSnap.forEach(ed=>{
+      const e = ed.data();
+      const per = e.amount/(e.members?.length||1);
+      if(e.paidBy===currentUser.uid) {
+        (e.members||[]).filter(m=>friendIds.includes(m)).forEach(m=>balances[m]=((balances[m]||0)+per));
+      } else if((e.members||[]).includes(currentUser.uid) && friendIds.includes(e.paidBy)) {
+        balances[e.paidBy]=((balances[e.paidBy]||0)-per);
+      }
+    });
+  }
+  const friendsData = await Promise.all(friendIds.map(async fid=>{
+    const s = await getDoc(doc(db,'users',fid)); return s.exists()?{id:fid,...s.data()}:null;
+  }));
+  const valid = friendsData.filter(Boolean);
+  if(!valid.length) { el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div></div>'; return; }
+  el.innerHTML = valid.map(f=>{
+    const b = balances[f.id]||0;
+    return `<div class="friend-item">
+      <div class="avatar sm">${initials(f.name)}</div>
+      <div class="friend-info">
+        <div class="friend-name">${f.name}</div>
+        <div class="friend-handle">@${f.username}</div>
+      </div>
+      <div class="friend-balance">
+        <div class="balance-label">${b>=0?'ti deve':'devi'}</div>
+        <div class="balance-amount ${b>=0?'amount-pos':'amount-neg'}">${fmtAmt(Math.abs(b))}</div>
+      </div>
+      ${Math.abs(b)>0.01?`<button class="btn-settle" onclick="openSettle('${f.id}','${f.name}',${b.toFixed(2)})">Salda</button>`:''}
+    </div>`;
+  }).join('');
+};
+
+// ── GROUPS ──
+window.createGroup = async () => {
+  const name = document.getElementById('new-group-name').value.trim();
+  const emoji = document.getElementById('new-group-category').value;
+  const desc = document.getElementById('new-group-desc').value.trim();
+  const currency = document.getElementById('new-group-currency').value;
+  if(!name) return toast('Inserisci il nome del conto','error');
+  try {
+    const gRef = await addDoc(collection(db,'groups'),{
+      name, emoji, description:desc, currency,
+      members:[currentUser.uid], memberNames:[userProfile.name],
+      createdBy:currentUser.uid, createdAt:serverTimestamp()
+    });
+    await addDoc(collection(db,'groups',gRef.id,'activity'),{
+      type:'group_created', text:`${userProfile.name} ha creato il conto`, uid:currentUser.uid,
+      createdAt:serverTimestamp()
+    });
+    closeModal('modal-new-group');
+    document.getElementById('new-group-name').value='';
+    toast('Conto creato con successo!','success');
+    openGroup(gRef.id);
+  } catch(e) { toast('Errore: '+e.message,'error'); }
+};
+
+window.openGroup = async (groupId) => {
+  activeGroup = myGroups.find(g=>g.id===groupId);
+  if(!activeGroup) {
+    const snap = await getDoc(doc(db,'groups',groupId));
+    if(!snap.exists()) return toast('Conto non trovato','error');
+    activeGroup = {id:snap.id,...snap.data()};
+  }
+  renderSidebarGroups();
+  document.getElementById('gd-emoji').textContent = activeGroup.emoji||'📂';
+  document.getElementById('gd-name').textContent = activeGroup.name;
+  document.getElementById('gd-breadcrumb').textContent = activeGroup.name;
+  document.getElementById('gd-members-count').textContent = (activeGroup.members||[]).length + ' membri';
+  showPage('group-detail');
+  switchGroupTab('expenses');
+  loadGroupExpenses();
+};
+
+window.switchGroupTab = (tab) => {
+  currentGroupTab = tab;
+  ['expenses','members','balances','notes'].forEach(t=>{
+    const el = document.getElementById('gd-'+t); if(el) el.style.display='none';
+  });
+  document.getElementById('gd-'+tab).style.display='';
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active', ['expenses','members','balances','notes'][i]===tab);
+  });
+  if(tab==='expenses') loadGroupExpenses();
+  if(tab==='members') loadGroupMembers();
+  if(tab==='balances') loadGroupBalances();
+  if(tab==='notes') loadGroupNotes();
+};
+
+const loadGroupExpenses = async () => {
+  if(!activeGroup) return;
+  const el = document.getElementById('gd-expense-list');
+  el.innerHTML='<div style="text-align:center;padding:20px"><div class="loader" style="margin:0 auto"></div></div>';
+  try {
+    const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), orderBy('date','desc')));
+    if(snap.empty) { el.innerHTML='<div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Nessuna spesa</div><div class="empty-sub">Aggiungi la prima spesa al conto</div></div>'; return; }
+    const membersSnap = await Promise.all((activeGroup.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
+    const memberMap = {};
+    membersSnap.forEach(s=>{ if(s.exists()) memberMap[s.id]=s.data().name; });
+    const per = snap.docs.length ? 1/(activeGroup.members||[]).length : 1;
+    el.innerHTML = snap.docs.map(d=>{
+      const e = {id:d.id,...d.data()};
+      const payerName = memberMap[e.paidBy]||'?';
+      const isMine = e.paidBy===currentUser.uid;
+      const share = e.amount/(e.members?.length||1);
+      const myShare = isMine ? share*((e.members||[]).filter(m=>m!==currentUser.uid).length) : -(share);
+      return `<div class="expense-item" onclick="showExpenseDetail('${e.id}')">
+        <div class="expense-date">${e.date?e.date.split('-').slice(1).join('/'):ts2date(e.createdAt)}</div>
+        <div class="expense-info">
+          <div class="expense-title">${e.category||'💳'} ${e.title}</div>
+          <div class="expense-payer">Pagato da ${payerName}${e.note?' · '+e.note:''}</div>
+        </div>
+        <div class="expense-amounts">
+          <div class="expense-total">${fmtAmt(e.amount)}</div>
+          <div class="expense-share ${myShare>=0?'amount-pos':'amount-neg'}">${isMine?'hai anticipato':'la tua parte'} ${fmtAmt(Math.abs(share))}</div>
+        </div>
+        ${e.settled?'<span class="chip green">✓</span>':''}
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML='<div style="color:var(--accent2);padding:20px;text-align:center">Errore: '+e.message+'</div>'; }
+};
+
+window.showExpenseDetail = (id) => {/* detail view could be expanded */};
+
+const loadGroupMembers = async () => {
+  if(!activeGroup) return;
+  const el = document.getElementById('gd-member-list');
+  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
+  const members = activeGroup.members||[];
+  const data = await Promise.all(members.map(uid=>getDoc(doc(db,'users',uid))));
+  const balances = await computeGroupBalances();
+  el.innerHTML = data.map(s=>{
+    if(!s.exists()) return '';
+    const u = s.data();
+    const b = balances[s.id]||0;
+    return `<div class="member-row">
+      <div class="avatar sm">${initials(u.name)}</div>
+      <div>
+        <div style="font-size:14px;font-weight:500">${u.name}</div>
+        <div class="member-role" style="font-family:'DM Mono',monospace">@${u.username}${s.id===activeGroup.createdBy?' · admin':''}</div>
+      </div>
+      <div class="member-balance-row ${b>=0?'amount-pos':'amount-neg'}">${b>=0?'credito':'debito'} ${fmtAmt(Math.abs(b))}</div>
+    </div>`;
+  }).join('');
+  // Invite pending
+  const invitesSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',activeGroup.id), where('status','==','pending')));
+  if(!invitesSnap.empty) {
+    el.innerHTML += '<div style="margin-top:16px;font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Inviti in attesa</div>';
+    invitesSnap.forEach(inv=>{
+      const i=inv.data();
+      el.innerHTML+=`<div class="invite-pending"><span>⏳</span><span style="font-size:13px;color:var(--text2)">${i.toEmail||i.toUsername} — in attesa</span></div>`;
+    });
+  }
+};
+
+const computeGroupBalances = async () => {
+  if(!activeGroup) return {};
+  const balances = {};
+  (activeGroup.members||[]).forEach(m=>balances[m]=0);
+  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), where('settled','==',false)));
+  snap.forEach(d=>{
+    const e=d.data();
+    const per=e.amount/(e.members?.length||1);
+    if(balances[e.paidBy]!==undefined) balances[e.paidBy]+=(per*(e.members?.length-1||0));
+    (e.members||[]).filter(m=>m!==e.paidBy).forEach(m=>{ if(balances[m]!==undefined) balances[m]-=per; });
+  });
+  return balances;
+};
+
+const loadGroupBalances = async () => {
+  const el = document.getElementById('gd-balance-list');
+  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
+  const balances = await computeGroupBalances();
+  const data = await Promise.all(Object.keys(balances).map(uid=>getDoc(doc(db,'users',uid))));
+  const nameMap={};
+  data.forEach(s=>{if(s.exists())nameMap[s.id]=s.data().name;});
+  const entries = Object.entries(balances).sort((a,b)=>b[1]-a[1]);
+  el.innerHTML = entries.map(([uid,bal])=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)">
+      <div class="avatar sm">${initials(nameMap[uid]||'?')}</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:500">${nameMap[uid]||'?'}</div>
+        <div class="balance-bar" style="width:200px"><div class="balance-fill" style="width:${Math.min(100,Math.abs(bal/20)*100)}%;background:${bal>=0?'linear-gradient(90deg,var(--accent3),#00e87a)':'linear-gradient(90deg,var(--accent2),#ff4040)'}"></div></div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:500;${bal>=0?'color:var(--accent3)':'color:var(--accent2)'}">
+        ${bal>=0?'riceve':'deve'} ${fmtAmt(Math.abs(bal))}
+      </div>
+      ${uid!==currentUser.uid && Math.abs(bal)>0.01?`<button class="btn-settle" onclick="openSettle('${uid}','${nameMap[uid]||'?'}',${(-bal).toFixed(2)})">Salda</button>`:''}
+    </div>`).join('');
+};
+
+const loadGroupNotes = async () => {
+  if(!activeGroup) return;
+  const el = document.getElementById('gd-note-list');
+  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
+  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'notes'), orderBy('createdAt','desc')));
+  if(snap.empty) { el.innerHTML='<div class="empty"><div class="empty-icon">📝</div><div class="empty-title">Nessuna nota</div><div class="empty-sub">Aggiungi note allo storico del conto</div></div>'; return; }
+  el.innerHTML = snap.docs.map(d=>{
+    const n=d.data();
+    return `<div class="note-item">
+      <div class="note-header">
+        <div class="note-author">${n.authorName||'?'}</div>
+        <div class="note-time">${tsShort(n.createdAt)}</div>
+      </div>
+      <div class="note-text">${n.text}</div>
+    </div>`;
+  }).join('');
+};
+
+// ── EXPENSE ──
+window.setSplitType = (type) => {
+  splitType = type;
+  document.querySelectorAll('.split-opt').forEach(b=>b.classList.remove('active'));
+  const opts = ['equal','percentage','custom'];
+  document.querySelectorAll('.split-opt')[opts.indexOf(type)]?.classList.add('active');
+};
+
+window.openExpenseModal = () => {
+  if(!activeGroup) return;
+  const gSel = document.getElementById('exp-group');
+  gSel.innerHTML = myGroups.map(g=>`<option value="${g.id}" ${g.id===activeGroup.id?'selected':''}>${g.emoji} ${g.name}</option>`).join('');
+  populatePayerSelect(activeGroup.id);
+  openModal('modal-add-expense');
+};
+
+const populatePayerSelect = async (groupId) => {
+  const g = myGroups.find(x=>x.id===groupId)||activeGroup;
+  if(!g) return;
+  const pSel = document.getElementById('exp-payer');
+  const data = await Promise.all((g.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
+  pSel.innerHTML = data.map(s=>`<option value="${s.id}" ${s.id===currentUser.uid?'selected':''}>${s.exists()?s.data().name:'?'}</option>`).join('');
+};
+
+document.getElementById('exp-group')?.addEventListener('change', e=>populatePayerSelect(e.target.value));
+
+window.addExpense = async () => {
+  const title = document.getElementById('exp-title').value.trim();
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const groupId = document.getElementById('exp-group').value;
+  const paidBy = document.getElementById('exp-payer').value;
+  const category = document.getElementById('exp-category').value;
+  const date = document.getElementById('exp-date').value;
+  const note = document.getElementById('exp-note').value.trim();
+  if(!title) return toast('Inserisci una descrizione','error');
+  if(!amount||amount<=0) return toast('Inserisci un importo valido','error');
+  if(!groupId) return toast('Seleziona un conto','error');
+  const g = myGroups.find(x=>x.id===groupId)||activeGroup;
+  const members = g.members||[];
+  try {
+    await addDoc(collection(db,'groups',groupId,'expenses'),{
+      title, amount, paidBy, category, date, note,
+      members, groupId, splitType, settled:false,
+      createdBy:currentUser.uid, createdAt:serverTimestamp()
+    });
+    await addNotification(members.filter(m=>m!==currentUser.uid), {
+      type:'expense', text:`${userProfile.name} ha aggiunto "${title}" (${fmtAmt(amount)}) nel conto ${g.name}`,
+      groupId, createdAt:serverTimestamp()
+    });
+    closeModal('modal-add-expense');
+    document.getElementById('exp-title').value='';
+    document.getElementById('exp-amount').value='';
+    toast('Spesa aggiunta!','success');
+    if(activeGroup?.id===groupId) loadGroupExpenses();
+    renderDashboard();
+  } catch(e) { toast('Errore: '+e.message,'error'); }
+};
+
+// ── NOTES ──
+window.openNoteModal = () => { if(!activeGroup) return; openModal('modal-add-note'); };
+window.addNote = async () => {
+  const text = document.getElementById('note-text').value.trim();
+  if(!text||!activeGroup) return;
+  await addDoc(collection(db,'groups',activeGroup.id,'notes'),{
+    text, authorId:currentUser.uid, authorName:userProfile.name,
+    createdAt:serverTimestamp()
+  });
+  document.getElementById('note-text').value='';
+  closeModal('modal-add-note');
+  toast('Nota aggiunta!','success');
+  loadGroupNotes();
+};
+
+// ── INVITE ──
+window.openInviteModal = async () => {
+  if(!activeGroup) return;
+  const listEl = document.getElementById('invite-friends-list');
+  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
+  const friendIds = uSnap.data()?.friends||[];
+  if(!friendIds.length) { listEl.innerHTML='<div style="font-size:13px;color:var(--text3)">Nessun amico da invitare. Aggiungi prima degli amici.</div>'; }
+  else {
+    const fData = await Promise.all(friendIds.map(fid=>getDoc(doc(db,'users',fid))));
+    const alreadyIn = activeGroup.members||[];
+    listEl.innerHTML = '<div class="form-label" style="margin-bottom:8px">Amici</div>' +
+      fData.filter(s=>s.exists()&&!alreadyIn.includes(s.id)).map(s=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div class="avatar sm">${initials(s.data().name)}</div>
+          <div style="flex:1"><div style="font-size:14px">${s.data().name}</div><div style="font-size:11px;color:var(--text2)">@${s.data().username}</div></div>
+          <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="inviteUser('${s.id}','${s.data().name}')">Invita</button>
+        </div>`).join('');
+    if(!listEl.querySelectorAll('[onclick]').length) listEl.innerHTML='<div style="font-size:13px;color:var(--text3)">Tutti i tuoi amici sono già nel conto.</div>';
+  }
+  document.getElementById('invite-search-input').value='';
+  document.getElementById('invite-search-result').innerHTML='';
+  openModal('modal-invite-group');
+};
+
+document.getElementById('invite-search-input')?.addEventListener('input', async function(){
+  const val = this.value.trim().toLowerCase();
+  const res = document.getElementById('invite-search-result');
+  if(val.length<3){res.innerHTML='';return;}
+  const uq = val.includes('@') ? query(collection(db,'users'),where('email','==',val)) : query(collection(db,'users'),where('username','==',val));
+  const snap = await getDocs(uq);
+  if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--text3)">Nessun utente trovato</div>';return;}
+  snap.forEach(s=>{
+    const u=s.data();
+    const alreadyIn=(activeGroup?.members||[]).includes(s.id);
+    res.innerHTML=`<div style="display:flex;align-items:center;gap:12px;background:var(--surface2);padding:12px;border-radius:10px">
+      <div class="avatar sm">${initials(u.name)}</div>
+      <div style="flex:1"><div>${u.name}</div><div style="font-size:12px;color:var(--text2)">@${u.username}</div></div>
+      ${alreadyIn?'<span style="font-size:12px;color:var(--accent3)">✓ Già membro</span>':`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="inviteUser('${s.id}','${u.name}')">Invita</button>`}
+    </div>`;
+  });
+});
+
+window.inviteUser = async (uid, name) => {
+  if(!activeGroup) return;
+  if((activeGroup.members||[]).includes(uid)) return toast('Già membro del conto','info');
+  const invSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',activeGroup.id), where('toUid','==',uid), where('status','==','pending')));
+  if(!invSnap.empty) return toast('Invito già inviato','info');
+  await addDoc(collection(db,'invites'),{
+    groupId:activeGroup.id, groupName:activeGroup.name, groupEmoji:activeGroup.emoji||'📂',
+    fromUid:currentUser.uid, fromName:userProfile.name,
+    toUid:uid, status:'pending', createdAt:serverTimestamp()
+  });
+  await addNotification([uid],{
+    type:'invite', text:`${userProfile.name} ti ha invitato nel conto "${activeGroup.name}"`,
+    groupId:activeGroup.id, inviteAcceptAction:true, createdAt:serverTimestamp()
+  });
+  toast(`Invito inviato a ${name}!`,'success');
+};
+
+// ── FRIENDS ──
+window.switchFriendsTab = (tab) => {
+  currentFriendsTab = tab;
+  document.querySelectorAll('#page-friends .tab-btn').forEach((b,i)=>b.classList.toggle('active',['friends','requests','sent'][i]===tab));
+  loadFriendsPage();
+};
+
+window.loadFriendsPage = async () => {
+  const el = document.getElementById('friends-list');
+  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
+  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
+  const uData = uSnap.data()||{};
+  if(currentFriendsTab==='friends') {
+    const friends = uData.friends||[];
+    document.getElementById('ps-friends').textContent=friends.length;
+    if(!friends.length){el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div><div class="empty-sub">Aggiungi amici tramite username o email</div></div>';return;}
+    const data=await Promise.all(friends.map(fid=>getDoc(doc(db,'users',fid))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
+      <div class="friend-item">
+        <div class="avatar sm">${initials(s.data().name)}</div>
+        <div class="friend-info">
+          <div class="friend-name">${s.data().name}</div>
+          <div class="friend-handle">@${s.data().username}</div>
+        </div>
+        <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="removeFriend('${s.id}','${s.data().name}')">Rimuovi</button>
+      </div>`).join('');
+  } else if(currentFriendsTab==='requests') {
+    const reqs = uData.friendRequests||[];
+    document.getElementById('req-count').textContent=reqs.length?`(${reqs.length})`:'';
+    if(!reqs.length){el.innerHTML='<div class="empty"><div class="empty-icon">📬</div><div class="empty-title">Nessuna richiesta</div><div class="empty-sub">Nessuna richiesta di amicizia in arrivo</div></div>';return;}
+    const data=await Promise.all(reqs.map(uid=>getDoc(doc(db,'users',uid))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
+      <div class="friend-item">
+        <div class="avatar sm">${initials(s.data().name)}</div>
+        <div class="friend-info">
+          <div class="friend-name">${s.data().name}</div>
+          <div class="friend-handle">@${s.data().username}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="acceptFriend('${s.id}','${s.data().name}')">✓ Accetta</button>
+          <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="declineFriend('${s.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  } else {
+    const sent = uData.sentRequests||[];
+    if(!sent.length){el.innerHTML='<div class="empty"><div class="empty-icon">📤</div><div class="empty-title">Nessun invito inviato</div></div>';return;}
+    const data=await Promise.all(sent.map(uid=>getDoc(doc(db,'users',uid))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
+      <div class="friend-item">
+        <div class="avatar sm">${initials(s.data().name)}</div>
+        <div class="friend-info">
+          <div class="friend-name">${s.data().name}</div>
+          <div class="friend-handle">@${s.data().username}</div>
+        </div>
+        <span class="chip">⏳ In attesa</span>
+      </div>`).join('');
+  }
+};
+
+window.filterFriends = async (val) => { /* basic filter implemented via reload */ };
+
+window.searchAndAddFriend = async () => {
+  const val = document.getElementById('friend-search-input').value.trim().toLowerCase();
+  const res = document.getElementById('friend-search-result');
+  if(!val) return;
+  const q1 = val.includes('@')||val.includes('.') ? query(collection(db,'users'),where('email','==',val)) : query(collection(db,'users'),where('username','==',val));
+  const snap = await getDocs(q1);
+  if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--accent2)">Nessun utente trovato con questo username/email</div>';return;}
+  snap.forEach(async s=>{
+    if(s.id===currentUser.uid){res.innerHTML='<div style="font-size:13px;color:var(--text2)">Non puoi aggiungere te stesso</div>';return;}
+    const uData=(await getDoc(doc(db,'users',currentUser.uid))).data()||{};
+    if((uData.friends||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--accent3)">✓ Siete già amici</div>';return;}
+    if((uData.sentRequests||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--text2)">Richiesta già inviata</div>';return;}
+    const u=s.data();
+    res.innerHTML=`<div style="background:var(--surface2);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px">
+      <div class="avatar sm">${initials(u.name)}</div>
+      <div style="flex:1"><div>${u.name}</div><div style="font-size:12px;color:var(--text2)">@${u.username}</div></div>
+      <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="sendFriendRequest('${s.id}','${u.name}')">Invia richiesta</button>
+    </div>`;
+  });
+};
+
+window.sendFriendRequest = async (toUid, toName) => {
+  await updateDoc(doc(db,'users',toUid),{friendRequests:arrayUnion(currentUser.uid)});
+  await updateDoc(doc(db,'users',currentUser.uid),{sentRequests:arrayUnion(toUid)});
+  await addNotification([toUid],{type:'friend_request',text:`${userProfile.name} ti ha inviato una richiesta di amicizia`,createdAt:serverTimestamp()});
+  toast(`Richiesta inviata a ${toName}!`,'success');
+  document.getElementById('friend-search-result').innerHTML='<div style="font-size:13px;color:var(--accent3)">✓ Richiesta inviata!</div>';
+};
+
+window.acceptFriend = async (uid, name) => {
+  await updateDoc(doc(db,'users',currentUser.uid),{friends:arrayUnion(uid), friendRequests:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{friends:arrayUnion(currentUser.uid), sentRequests:arrayRemove(currentUser.uid)});
+  await addNotification([uid],{type:'friend_accepted',text:`${userProfile.name} ha accettato la tua richiesta di amicizia`,createdAt:serverTimestamp()});
+  toast(`Sei ora amico di ${name}!`,'success');
+  loadFriendsPage();
+};
+
+window.declineFriend = async (uid) => {
+  await updateDoc(doc(db,'users',currentUser.uid),{friendRequests:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{sentRequests:arrayRemove(currentUser.uid)});
+  toast('Richiesta rifiutata','info');
+  loadFriendsPage();
+};
+
+window.removeFriend = async (uid, name) => {
+  if(!confirm(`Rimuovere ${name} dagli amici?`)) return;
+  await updateDoc(doc(db,'users',currentUser.uid),{friends:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{friends:arrayRemove(currentUser.uid)});
+  toast(`${name} rimosso dagli amici`,'info');
+  loadFriendsPage();
+};
+
+// ── SETTLE ──
+window.openSettle = (uid, name, amount) => {
+  settleData = {uid, name, amount:parseFloat(amount)};
+  const sign = settleData.amount;
+  document.getElementById('settle-text').innerHTML = sign>0
+    ? `<b>${name}</b> ti deve <span style="color:var(--accent3);font-family:'DM Mono',monospace">${fmtAmt(Math.abs(sign))}</span>`
+    : `Devi <span style="color:var(--accent2);font-family:'DM Mono',monospace">${fmtAmt(Math.abs(sign))}</span> a <b>${name}</b>`;
+  openModal('modal-settle');
+};
+
+window.confirmSettle = async () => {
+  if(!settleData||!activeGroup) return;
+  // Mark all unsettled expenses between these two as settled
+  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), where('settled','==',false)));
+  const batch = [];
+  snap.forEach(d=>{
+    const e=d.data();
+    if((e.paidBy===currentUser.uid&&(e.members||[]).includes(settleData.uid)) ||
+       (e.paidBy===settleData.uid&&(e.members||[]).includes(currentUser.uid))) {
+      batch.push(updateDoc(doc(db,'groups',activeGroup.id,'expenses',d.id),{settled:true}));
+    }
+  });
+  await Promise.all(batch);
+  await addNotification([settleData.uid],{type:'settle',text:`${userProfile.name} ha saldato il debito nel conto ${activeGroup.name}`,groupId:activeGroup.id,createdAt:serverTimestamp()});
+  closeModal('modal-settle');
+  toast('Debito saldato!','success');
+  loadGroupBalances();
+  renderDashboard();
+};
+
+// ── NOTIFICATIONS ──
+const addNotification = async (uids, data) => {
+  await Promise.all(uids.map(uid=>addDoc(collection(db,'users',uid,'notifications'),{...data,read:false})));
+};
+
+const subscribeNotifications = () => {
+  const q = query(collection(db,'users',currentUser.uid,'notifications'), orderBy('createdAt','desc'));
+  const unsub = onSnapshot(q, snap=>{
+    const unread = snap.docs.filter(d=>!d.data().read).length;
+    const badge = document.getElementById('notif-badge');
+    badge.style.display = unread>0?'':'none';
+    badge.textContent = unread;
+    const friendReqs = snap.docs.filter(d=>d.data().type==='friend_request').length;
+    const fb = document.getElementById('friends-badge');
+    fb.style.display = friendReqs>0?'':'none';
+    fb.textContent = friendReqs;
+  });
+  unsubscribers.push(unsub);
+};
+
+window.loadNotificationsPage = async () => {
+  const el = document.getElementById('notif-list');
+  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
+  const snap = await getDocs(query(collection(db,'users',currentUser.uid,'notifications'), orderBy('createdAt','desc')));
+  if(snap.empty){el.innerHTML='<div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">Nessuna notifica</div><div class="empty-sub">Sei in pari con tutto!</div></div>';return;}
+  el.innerHTML=snap.docs.map(d=>{
+    const n=d.data();
+    const icons={expense:'💳',invite:'📩',friend_request:'👥',friend_accepted:'✅',settle:'💚',default:'🔔'};
+    return `<div class="notif-item" onclick="markRead('${d.id}')">
+      <div class="notif-dot ${n.read?'read':''}"></div>
+      <div class="notif-content">
+        <div class="notif-text">${icons[n.type]||'🔔'} ${n.text}</div>
+        <div class="notif-time">${tsShort(n.createdAt)}</div>
+      </div>
+      ${n.inviteAcceptAction&&!n.read?`<button class="btn-accent" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="acceptGroupInvite('${n.groupId}','${d.id}');event.stopPropagation()">Accetta</button>`:''}
+    </div>`;
+  }).join('');
+};
+
+window.markRead = async (id) => {
+  await updateDoc(doc(db,'users',currentUser.uid,'notifications',id),{read:true});
+};
+
+window.markAllRead = async () => {
+  const snap = await getDocs(collection(db,'users',currentUser.uid,'notifications'));
+  await Promise.all(snap.docs.map(d=>updateDoc(d.ref,{read:true})));
+  toast('Tutte le notifiche segnate come lette','success');
+  loadNotificationsPage();
+};
+
+window.acceptGroupInvite = async (groupId, notifId) => {
+  if(!groupId) return;
+  await updateDoc(doc(db,'groups',groupId),{
+    members: arrayUnion(currentUser.uid),
+    memberNames: arrayUnion(userProfile.name)
+  });
+  await updateDoc(doc(db,'users',currentUser.uid,'notifications',notifId),{read:true, inviteAcceptAction:false});
+  const invSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',groupId), where('toUid','==',currentUser.uid)));
+  invSnap.forEach(d=>updateDoc(d.ref,{status:'accepted'}));
+  toast('Hai unito al conto!','success');
+  loadNotificationsPage();
+};
+
+// ── PROFILE ──
+window.loadProfilePage = async () => {
+  document.getElementById('ps-groups').textContent = myGroups.length;
+  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
+  const u = uSnap.data()||{};
+  document.getElementById('ps-friends').textContent = (u.friends||[]).length;
+  // Count expenses
+  let expCount=0;
+  for(const g of myGroups) {
+    const s=await getDocs(query(collection(db,'groups',g.id,'expenses'),where('paidBy','==',currentUser.uid)));
+    expCount+=s.size;
+  }
+  document.getElementById('ps-expenses').textContent = expCount;
+};
+
+window.saveProfile = async () => {
+  const name = document.getElementById('edit-name').value.trim();
+  const username = document.getElementById('edit-username').value.trim().toLowerCase();
+  if(!name||!username) return toast('Compila tutti i campi','error');
+  if(username!==userProfile.username) {
+    const uq=query(collection(db,'users'),where('username','==',username));
+    const s=await getDocs(uq);
+    if(!s.empty&&s.docs[0].id!==currentUser.uid) return toast('Username già in uso','error');
+  }
+  await updateDoc(doc(db,'users',currentUser.uid),{name,username});
+  userProfile.name=name; userProfile.username=username;
+  setupSidebar();
+  toast('Profilo aggiornato!','success');
+};
+
+window.changePassword = async () => {
+  const np=document.getElementById('new-pass').value;
+  const cp=document.getElementById('conf-pass').value;
+  if(!np||np.length<6) return toast('Password troppo corta (min 6 caratteri)','error');
+  if(np!==cp) return toast('Le password non coincidono','error');
+  try { await updatePassword(currentUser,np); toast('Password aggiornata!','success'); closeModal('modal-change-pass'); }
+  catch(e) { toast('Errore: rieffettua il login e riprova','error'); }
+};
+
+// ── SETUP GROUPS FOR EXPENSE MODAL ──
+window.openModal = (id) => {
+  if(id==='modal-add-expense' && myGroups.length) {
+    const gSel = document.getElementById('exp-group');
+    gSel.innerHTML = myGroups.map(g=>`<option value="${g.id}" ${activeGroup&&g.id===activeGroup.id?'selected':''}>${g.emoji} ${g.name}</option>`).join('');
+    populatePayerSelect(gSel.value);
+  }
+  document.getElementById(id).classList.add('open');
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
+});
+</script>
+</body>
+</html>
