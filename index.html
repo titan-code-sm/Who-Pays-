@@ -2,2237 +2,1170 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Who Pays?</title>
+<meta name="application-name" content="Who Pays?">
+<meta name="description" content="Dividi le spese, semplicemente.">
+<meta name="theme-color" content="#0d0d14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Who Pays?">
+<meta name="msapplication-TileColor" content="#0d0d14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!--
+  ┌─────────────────────────────────────────────────────┐
+  │  PWA ICONS — generati sincrono PRIMA del DOM parse  │
+  │  così iOS/Android li leggono come tag statici reali │
+  └─────────────────────────────────────────────────────┘
+-->
+<script>
+(function(){
+  // Genera icona 💸 su canvas, ritorna data URI PNG
+  function makeIcon(size){
+    var c=document.createElement('canvas');
+    c.width=c.height=size;
+    var ctx=c.getContext('2d'),r=size*.22;
+    // Rounded rect
+    function rr(){ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(size-r,0);ctx.quadraticCurveTo(size,0,size,r);ctx.lineTo(size,size-r);ctx.quadraticCurveTo(size,size,size-r,size);ctx.lineTo(r,size);ctx.quadraticCurveTo(0,size,0,size-r);ctx.lineTo(0,r);ctx.quadraticCurveTo(0,0,r,0);ctx.closePath()}
+    // BG gradient
+    rr();
+    var bg=ctx.createLinearGradient(0,0,size,size);
+    bg.addColorStop(0,'#1e1e2e');bg.addColorStop(1,'#0d0d14');
+    ctx.fillStyle=bg;ctx.fill();
+    // Gold glow
+    var glow=ctx.createRadialGradient(size*.42,size*.36,0,size*.5,size*.5,size*.52);
+    glow.addColorStop(0,'rgba(245,200,66,0.22)');glow.addColorStop(1,'rgba(245,200,66,0)');
+    ctx.fillStyle=glow;ctx.beginPath();ctx.arc(size*.5,size*.5,size*.5,0,Math.PI*2);ctx.fill();
+    // Emoji
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=size*.54+'px serif';
+    ctx.fillText('💸',size*.5,size*.53);
+    // Gold border
+    rr();
+    ctx.strokeStyle='rgba(245,200,66,0.38)';ctx.lineWidth=size*.027;ctx.stroke();
+    return c.toDataURL('image/png');
+  }
+
+  // Genera le icone necessarie nell'head prima del parsing
+  var sizes=[72,96,128,144,152,180,192,384,512];
+  var icons={};
+  sizes.forEach(function(s){icons[s]=makeIcon(s)});
+
+  // Salva globalmente per il manifest JS
+  window.__PWA_ICONS=icons;
+
+  // Inietta i tag nell'head corrente
+  function addLink(rel,sizes,href,type){
+    var l=document.createElement('link');
+    l.rel=rel;if(sizes)l.setAttribute('sizes',sizes);
+    l.href=href;if(type)l.type=type;
+    document.head.appendChild(l);
+  }
+
+  // Favicon browser
+  addLink('shortcut icon',null,icons[32],'image/png');
+  addLink('icon','32x32',icons[32],'image/png');
+  addLink('icon','192x192',icons[192],'image/png');
+
+  // Apple touch icons (iOS legge questi tag statici)
+  addLink('apple-touch-icon','180x180',icons[180]);
+  addLink('apple-touch-icon','167x167',icons[152]);  // iPad
+  addLink('apple-touch-icon','152x152',icons[152]);
+  addLink('apple-touch-icon','120x120',icons[128]);
+
+  // Splash / tile Microsoft
+  var ms=document.createElement('meta');
+  ms.name='msapplication-TileImage';ms.content=icons[144];
+  document.head.appendChild(ms);
+
+  // Manifest (Blob URL — Chrome/Android lo accetta)
+  var manifest={
+    name:'Who Pays?',short_name:'Who Pays?',
+    description:'Dividi le spese con amici, semplicemente.',
+    start_url:'./',scope:'./',
+    display:'standalone',orientation:'portrait-primary',
+    background_color:'#0d0d14',theme_color:'#0d0d14',
+    lang:'it',categories:['finance','utilities'],
+    icons:sizes.map(function(s){return{src:icons[s],sizes:s+'x'+s,type:'image/png',purpose:'any maskable'}})
+  };
+  var blob=new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'});
+  var mUrl=URL.createObjectURL(blob);
+  var mLink=document.createElement('link');
+  mLink.rel='manifest';mLink.href=mUrl;
+  document.head.appendChild(mLink);
+
+  // Service Worker (Blob URL)
+  if('serviceWorker' in navigator){
+    var swCode=[
+      "const CACHE='wp-v3';",
+      "self.addEventListener('install',e=>self.skipWaiting());",
+      "self.addEventListener('activate',e=>{",
+      "  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));",
+      "  self.clients.claim();",
+      "});",
+      "self.addEventListener('fetch',e=>{",
+      "  if(e.request.method!=='GET')return;",
+      "  const u=e.request.url;",
+      "  if(u.includes('firestore')||u.includes('firebase')||u.includes('googleapis')||u.includes('gstatic')||u.includes('blob:'))return;",
+      "  e.respondWith(fetch(e.request).then(r=>{",
+      "    const cl=r.clone();",
+      "    caches.open(CACHE).then(c=>c.put(e.request,cl));",
+      "    return r;",
+      "  }).catch(()=>caches.match(e.request)));",
+      "});"
+    ].join('\n');
+    var swBlob=new Blob([swCode],{type:'application/javascript'});
+    var swUrl=URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl,{scope:'./'}).catch(function(){});
+  }
+})();
+</script>
+
 <style>
-:root {
-  --bg: #0a0a0f;
-  --surface: #12121a;
-  --surface2: #1a1a26;
-  --surface3: #22223a;
-  --border: rgba(255,255,255,0.07);
-  --accent: #f5c842;
-  --accent2: #ff6b6b;
-  --accent3: #6bffb8;
-  --accent4: #6b9eff;
-  --text: #f0f0f8;
-  --text2: #9898b8;
-  --text3: #5a5a7a;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --shadow: 0 4px 40px rgba(0,0,0,0.5);
+/* ── TOKENS ── */
+:root{
+  --bg:#0d0d14;--bg2:#111119;
+  --card:#15151f;--card2:#1c1c2a;--card3:#242434;
+  --border:rgba(255,255,255,0.055);--border2:rgba(255,255,255,0.1);
+  --gold:#f5c842;--gold2:#d9a800;--gold-dim:rgba(245,200,66,0.12);
+  --red:#ff6b6b;--green:#3dffa0;--blue:#7b9fff;--purple:#b47fff;
+  --t1:#ededfa;--t2:#7878a0;--t3:#3c3c58;
+  --r:18px;--r-sm:12px;--r-xs:8px;
+  --nav-h:68px;
+  --sb:env(safe-area-inset-bottom,0px);
+  --st:env(safe-area-inset-top,0px);
 }
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t1);overflow-x:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--card3);border-radius:10px}
+button,input,select,textarea{font-family:inherit}
 
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 10px; }
+/* ── SPLASH ── */
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:22px;z-index:9999}
+.sp-logo{width:96px;height:96px;background:linear-gradient(145deg,#1c1c2a,#0d0d14);border-radius:26px;display:flex;align-items:center;justify-content:center;font-size:50px;box-shadow:0 0 0 1.5px var(--border2),0 0 60px rgba(245,200,66,0.18);animation:splashPulse 2s ease infinite}
+@keyframes splashPulse{0%,100%{box-shadow:0 0 0 1.5px var(--border2),0 0 40px rgba(245,200,66,0.12)}50%{box-shadow:0 0 0 1.5px rgba(245,200,66,0.25),0 0 70px rgba(245,200,66,0.28)}}
+.sp-name{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;letter-spacing:-.5px}
+.sp-name b{color:var(--gold)}
+.sp-dots{display:flex;gap:7px}
+.sp-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:dotPop 1.1s ease infinite}
+.sp-dot:nth-child(2){animation-delay:.18s}.sp-dot:nth-child(3){animation-delay:.36s}
+@keyframes dotPop{0%,80%,100%{transform:scale(0.3);opacity:.3}40%{transform:scale(1);opacity:1}}
 
-/* ── AUTH SCREEN ── */
-#auth-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  position: relative;
-  overflow: hidden;
-}
-#auth-screen::before {
-  content: '';
-  position: absolute;
-  width: 600px; height: 600px;
-  background: radial-gradient(circle, rgba(245,200,66,0.08) 0%, transparent 70%);
-  top: -100px; left: -100px;
-  pointer-events: none;
-}
-#auth-screen::after {
-  content: '';
-  position: absolute;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, rgba(107,158,255,0.06) 0%, transparent 70%);
-  bottom: -50px; right: -50px;
-  pointer-events: none;
-}
-.auth-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 48px;
-  width: 420px;
-  max-width: 95vw;
-  box-shadow: var(--shadow);
-  position: relative;
-  z-index: 1;
-  animation: fadeUp 0.5s ease;
-}
-.app-logo {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 36px;
-}
-.logo-icon {
-  width: 52px; height: 52px;
-  background: linear-gradient(135deg, var(--accent), #e6a800);
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
-  box-shadow: 0 4px 20px rgba(245,200,66,0.3);
-}
-.app-name {
-  font-family: 'Syne', sans-serif;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-.app-name span { color: var(--accent); }
-.auth-tabs {
-  display: flex;
-  background: var(--surface2);
-  border-radius: var(--radius-sm);
-  padding: 4px;
-  margin-bottom: 28px;
-  gap: 4px;
-}
-.auth-tab {
-  flex: 1;
-  padding: 10px;
-  border: none;
-  background: transparent;
-  color: var(--text2);
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-.auth-tab.active {
-  background: var(--surface3);
-  color: var(--text);
-}
-.form-group { margin-bottom: 16px; }
-.form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text2);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 8px;
-}
-.form-input {
-  width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 15px;
-  transition: border-color 0.2s;
-  outline: none;
-}
-.form-input:focus { border-color: var(--accent); }
-.form-input::placeholder { color: var(--text3); }
-.btn-primary {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, var(--accent), #e6a800);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: #0a0a0f;
-  font-family: 'Syne', sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  letter-spacing: 0.3px;
-  margin-top: 8px;
-}
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(245,200,66,0.35); }
-.btn-primary:active { transform: translateY(0); }
-.auth-error {
-  background: rgba(255,107,107,0.12);
-  border: 1px solid rgba(255,107,107,0.3);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: var(--accent2);
-  margin-bottom: 16px;
-  display: none;
-}
+/* ── AUTH ── */
+#auth{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 20px;background:var(--bg);position:relative;overflow:hidden}
+.auth-orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+.auth-orb.a{width:500px;height:500px;background:rgba(245,200,66,0.055);top:-180px;left:-150px}
+.auth-orb.b{width:360px;height:360px;background:rgba(123,159,255,0.04);bottom:-100px;right:-80px}
+.auth-box{width:100%;max-width:420px;background:var(--card);border:1px solid var(--border2);border-radius:28px;padding:40px 32px;box-shadow:0 32px 80px rgba(0,0,0,0.6);position:relative;z-index:1;animation:fadeUp .5s ease}
+.auth-brand{display:flex;align-items:center;gap:14px;margin-bottom:34px}
+.auth-brand-ico{width:58px;height:58px;background:linear-gradient(145deg,#1c1c2a,#0d0d14);border:1px solid rgba(245,200,66,0.22);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 0 32px rgba(245,200,66,0.18),inset 0 1px 0 rgba(255,255,255,0.04)}
+.auth-brand-name{font-family:'Syne',sans-serif;font-size:25px;font-weight:800;letter-spacing:-.3px}
+.auth-brand-name span{color:var(--gold)}
+.auth-brand-sub{font-size:12px;color:var(--t2);margin-top:3px}
+.seg{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:4px;gap:4px;margin-bottom:28px}
+.seg-btn{flex:1;padding:12px;border:none;background:transparent;color:var(--t2);border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;transition:all .2s}
+.seg-btn.on{background:var(--card2);color:var(--t1);box-shadow:0 2px 12px rgba(0,0,0,0.35)}
+.auth-err{background:rgba(255,107,107,0.09);border:1px solid rgba(255,107,107,0.22);border-radius:var(--r-xs);padding:11px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
+.fg{margin-bottom:14px}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.9px;margin-bottom:7px}
+.fi{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;color:var(--t1);font-size:15px;transition:border-color .2s,background .2s;outline:none}
+.fi:focus{border-color:rgba(245,200,66,0.4);background:var(--card2)}
+.fi::placeholder{color:var(--t3)}
+.fi option{background:var(--card2)}
+select.fi{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%2344445a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px}
+.btn-gold{width:100%;padding:15px;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;border-radius:var(--r-sm);color:#0d0d14;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.1px;transition:all .2s;margin-top:8px}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(245,200,66,0.32)}
+.btn-gold:active{transform:none;box-shadow:none}
 
-/* ── APP LAYOUT ── */
-#app { display: none; height: 100vh; flex-direction: row; }
-
-/* ── SIDEBAR ── */
-.sidebar {
-  width: 260px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  position: fixed;
-  left: 0; top: 0;
-  z-index: 100;
-  overflow-y: auto;
-}
-.sidebar-header {
-  padding: 24px 20px;
-  border-bottom: 1px solid var(--border);
-}
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.sidebar-logo .logo-icon { width: 38px; height: 38px; font-size: 18px; border-radius: 10px; }
-.sidebar-logo .app-name { font-size: 18px; }
-.user-pill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface2);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-}
-.avatar {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent4), #4a7be0);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
-  font-weight: 700;
-  font-size: 13px;
-  color: #fff;
-  flex-shrink: 0;
-}
-.avatar.sm { width: 28px; height: 28px; font-size: 11px; }
-.avatar.lg { width: 48px; height: 48px; font-size: 18px; }
-.user-info { flex: 1; min-width: 0; }
-.user-name { font-size: 14px; font-weight: 500; truncate; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-handle { font-size: 11px; color: var(--text2); font-family: 'DM Mono', monospace; }
-.sidebar-nav { padding: 16px 12px; flex: 1; }
-.nav-section-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  padding: 0 8px;
-  margin: 16px 0 8px;
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--text2);
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-}
-.nav-item:hover { background: var(--surface2); color: var(--text); }
-.nav-item.active { background: rgba(245,200,66,0.12); color: var(--accent); }
-.nav-item .nav-icon { font-size: 17px; width: 20px; text-align: center; }
-.nav-badge {
-  margin-left: auto;
-  background: var(--accent2);
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-}
-.sidebar-groups { padding: 0 12px; flex: 1; overflow-y: auto; }
-.group-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--text2);
-  font-size: 13px;
-  margin-bottom: 2px;
-}
-.group-item:hover { background: var(--surface2); color: var(--text); }
-.group-item.active { background: var(--surface2); color: var(--text); }
-.group-avatar {
-  width: 28px; height: 28px;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.sidebar-footer {
-  padding: 16px 12px;
-  border-top: 1px solid var(--border);
-}
-.btn-logout {
-  width: 100%;
-  padding: 10px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text2);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-logout:hover { border-color: var(--accent2); color: var(--accent2); }
-
-/* ── MAIN CONTENT ── */
-.main {
-  margin-left: 260px;
-  flex: 1;
-  height: 100vh;
-  overflow-y: auto;
-  background: var(--bg);
-}
-.main-content { padding: 32px; max-width: 1100px; }
+/* ── APP SHELL ── */
+#app{display:none;height:100dvh;flex-direction:column;overflow:hidden}
 
 /* ── TOPBAR ── */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-}
-.page-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-}
-.page-subtitle { font-size: 14px; color: var(--text2); margin-top: 2px; }
-.topbar-actions { display: flex; gap: 10px; align-items: center; }
-.btn-secondary {
-  padding: 10px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex; align-items: center; gap: 7px;
-}
-.btn-secondary:hover { border-color: rgba(255,255,255,0.15); background: var(--surface2); }
-.btn-accent {
-  padding: 10px 18px;
-  background: linear-gradient(135deg, var(--accent), #e6a800);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: #0a0a0f;
-  font-family: 'Syne', sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex; align-items: center; gap: 7px;
-}
-.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,200,66,0.3); }
+.topbar{flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border);padding:14px 20px;padding-top:calc(14px + var(--st));display:flex;align-items:center;justify-content:space-between;z-index:50}
+.tb-l{display:flex;align-items:center;gap:11px}
+.tb-ico{width:36px;height:36px;background:linear-gradient(145deg,#1c1c2a,#0d0d14);border:1px solid rgba(245,200,66,0.18);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.tb-name{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.35px}
+.tb-name span{color:var(--gold)}
+.tb-r{display:flex;gap:9px}
+.ib{width:38px;height:38px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;position:relative;transition:background .15s}
+.ib:hover{background:var(--card2)}
+.npip{position:absolute;top:7px;right:7px;width:7px;height:7px;background:var(--red);border-radius:50%;border:1.5px solid var(--bg);display:none}
 
-/* ── STAT CARDS ── */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; right: 0;
-  width: 80px; height: 80px;
-  border-radius: 50%;
-  opacity: 0.06;
-}
-.stat-card.green::before { background: var(--accent3); right: -20px; top: -20px; }
-.stat-card.red::before { background: var(--accent2); right: -20px; top: -20px; }
-.stat-card.blue::before { background: var(--accent4); right: -20px; top: -20px; }
-.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
-.stat-value {
-  font-family: 'Syne', sans-serif;
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -1px;
-}
-.stat-card.green .stat-value { color: var(--accent3); }
-.stat-card.red .stat-value { color: var(--accent2); }
-.stat-card.blue .stat-value { color: var(--accent4); }
-.stat-change { font-size: 12px; color: var(--text2); margin-top: 6px; }
+/* ── SCROLL AREA ── */
+.pages{flex:1;overflow-y:auto;padding-bottom:calc(var(--nav-h) + var(--sb) + 20px)}
 
-/* ── CARDS ── */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+/* ── BOTTOM NAV ── */
+.bnav{
+  position:fixed;bottom:0;left:0;right:0;
+  height:calc(var(--nav-h) + var(--sb));
+  padding-bottom:var(--sb);
+  background:rgba(11,11,18,0.92);
+  backdrop-filter:blur(24px) saturate(200%);
+  -webkit-backdrop-filter:blur(24px) saturate(200%);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;
+  z-index:100;
 }
-.card-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* 5 elementi: prima 2, poi FAB al centro, poi 2 */
+.ni{
+  flex:1;height:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:4px;cursor:pointer;border:none;background:transparent;
+  color:var(--t3);padding:8px 0;position:relative;
+  transition:color .18s;
 }
-.card-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
+.ni.on{color:var(--gold)}
+.ni-ico{font-size:24px;line-height:1;transition:transform .18s}
+.ni.on .ni-ico{transform:scale(1.1)}
+.ni-lbl{font-size:10px;font-weight:600;letter-spacing:.4px;transition:color .18s}
+.ni-badge{
+  position:absolute;top:8px;left:calc(50% + 4px);
+  background:var(--red);color:#fff;
+  font-size:9px;font-weight:700;
+  min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;border:2px solid var(--bg);
+  display:none;align-items:center;justify-content:center;
 }
-.card-body { padding: 20px 24px; }
+/* FAB centrale */
+.nfab{
+  flex:1.1;height:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:4px;cursor:pointer;border:none;background:transparent;
+  padding-bottom:4px;
+}
+.fab-ring{
+  width:54px;height:54px;
+  background:linear-gradient(140deg,var(--gold),var(--gold2));
+  border-radius:17px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;line-height:1;
+  box-shadow:0 4px 22px rgba(245,200,66,0.38);
+  transition:all .2s;
+  margin-top:-14px;
+}
+.nfab:hover .fab-ring{transform:scale(1.06) translateY(-2px);box-shadow:0 8px 32px rgba(245,200,66,0.48)}
+.nfab:active .fab-ring{transform:scale(0.97)}
+.fab-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--gold)}
 
-/* ── TWO COL ── */
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* ── PAGE ── */
+.page{display:none;padding:20px;animation:fadeUp .32s ease}
+.page.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── ACTIVITY ITEM ── */
-.activity-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-  animation: fadeIn 0.3s ease;
+/* ── HERO BALANCE ── */
+.hero{
+  background:linear-gradient(150deg,var(--card),var(--card2));
+  border:1px solid var(--border2);border-radius:24px;
+  padding:26px 22px;margin-bottom:20px;
+  position:relative;overflow:hidden;
 }
-.activity-item:last-child { border-bottom: none; }
-.activity-icon {
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  background: var(--surface2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px;
-  flex-shrink: 0;
-}
-.activity-meta { flex: 1; min-width: 0; }
-.activity-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
-.activity-sub { font-size: 12px; color: var(--text2); }
-.activity-amount {
-  font-family: 'DM Mono', monospace;
-  font-size: 15px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-.amount-pos { color: var(--accent3); }
-.amount-neg { color: var(--accent2); }
-.amount-neutral { color: var(--text2); }
+.hero::after{content:'';position:absolute;top:-70px;right:-50px;width:220px;height:220px;background:radial-gradient(circle,rgba(245,200,66,0.07) 0%,transparent 70%);pointer-events:none}
+.hero-lbl{font-size:11px;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.hero-val{font-family:'Syne',sans-serif;font-size:46px;font-weight:800;letter-spacing:-2.5px;line-height:1}
+.hero-sub{font-size:13px;color:var(--t2);margin-top:7px}
+.hero-stats{display:flex;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}
+.hstat{flex:1;text-align:center;border-right:1px solid var(--border)}
+.hstat:last-child{border-right:none}
+.hstat-v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+.hstat-l{font-size:11px;color:var(--t2);margin-top:3px}
 
-/* ── GROUP CARD ── */
-.group-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-.group-card:hover { border-color: rgba(245,200,66,0.3); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
-.group-card-emoji { font-size: 32px; margin-bottom: 12px; }
-.group-card-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-.group-card-members { font-size: 12px; color: var(--text2); margin-bottom: 14px; }
-.group-card-balance { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; }
-.group-card-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
-.member-avatars { display: flex; gap: -6px; margin-bottom: 10px; }
-.member-avatars .avatar { border: 2px solid var(--surface); margin-right: -8px; }
+/* ── SECTION HEADER ── */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sh-t{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;letter-spacing:-.3px}
+.sh-a{font-size:13px;color:var(--gold);font-weight:500;cursor:pointer;background:none;border:none}
 
-/* ── FRIENDS ── */
-.friend-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-.friend-item:last-child { border-bottom: none; }
-.friend-info { flex: 1; }
-.friend-name { font-size: 14px; font-weight: 500; }
-.friend-handle { font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; }
-.friend-balance { text-align: right; }
-.balance-label { font-size: 11px; color: var(--text2); }
-.balance-amount { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; }
+/* ── CARD ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card+.card{margin-top:12px}
+.card-hd{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-ht{font-family:'Syne',sans-serif;font-size:15px;font-weight:700}
 
-/* ── EXPENSE LIST ── */
-.expense-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.15s;
-  border-radius: 8px;
-  padding-left: 8px; padding-right: 8px;
-}
-.expense-item:hover { background: var(--surface2); }
-.expense-item:last-child { border-bottom: none; }
-.expense-date { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; width: 45px; text-align: center; line-height: 1.3; }
-.expense-info { flex: 1; }
-.expense-title { font-size: 14px; font-weight: 500; }
-.expense-payer { font-size: 12px; color: var(--text2); }
-.expense-amounts { text-align: right; }
-.expense-total { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; }
-.expense-share { font-size: 11px; color: var(--text2); }
+/* ── ROWS ── */
+.grow{display:flex;align-items:center;gap:13px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .14s}
+.grow:last-child{border-bottom:none}
+.grow:hover,.grow:active{background:var(--card2)}
+.grow-em{width:46px;height:46px;background:var(--card2);border:1px solid var(--border);border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.grow-inf{flex:1;min-width:0}
+.grow-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grow-sub{font-size:12px;color:var(--t2);margin-top:2px}
 
-/* ── MODAL ── */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.2s;
-}
-.modal-overlay.open { opacity: 1; pointer-events: all; }
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  width: 500px;
-  max-width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-  transform: translateY(20px);
-  transition: transform 0.3s ease;
-}
-.modal-overlay.open .modal { transform: translateY(0); }
-.modal-header {
-  padding: 24px 28px;
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-}
-.modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
-.modal-close {
-  width: 32px; height: 32px;
-  background: var(--surface2);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--text2);
-  font-size: 16px;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s;
-}
-.modal-close:hover { background: var(--surface3); color: var(--text); }
-.modal-body { padding: 24px 28px; }
-.modal-footer {
-  padding: 20px 28px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
+.arow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);transition:background .14s}
+.arow:last-child{border-bottom:none}
+.arow:hover{background:rgba(255,255,255,.02)}
+.arow-ico{width:40px;height:40px;background:var(--card2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.arow-inf{flex:1;min-width:0}
+.arow-t{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arow-s{font-size:12px;color:var(--t2);margin-top:2px}
+.arow-amt{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;flex-shrink:0}
 
-/* ── SPLIT OPTIONS ── */
-.split-options { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.split-opt {
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text2);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: 'DM Sans', sans-serif;
-}
-.split-opt.active { border-color: var(--accent); color: var(--accent); background: rgba(245,200,66,0.08); }
+.frow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border)}
+.frow:last-child{border-bottom:none}
+.frow-inf{flex:1}
+.frow-name{font-size:14px;font-weight:500}
+.frow-handle{font-size:12px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:2px}
 
-/* ── NOTE ITEM ── */
-.note-item {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  margin-bottom: 10px;
-  animation: fadeUp 0.3s ease;
-}
-.note-header { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
-.note-author { font-size: 12px; font-weight: 500; color: var(--accent); }
-.note-time { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; }
-.note-text { font-size: 14px; line-height: 1.6; color: var(--text2); }
+.erow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border);transition:background .14s}
+.erow:last-child{border-bottom:none}
+.erow:hover{background:rgba(255,255,255,.02)}
+.erow-date{text-align:center;width:36px;flex-shrink:0}
+.erow-day{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;line-height:1}
+.erow-mon{font-size:10px;color:var(--t2);text-transform:uppercase}
+.erow-inf{flex:1;min-width:0}
+.erow-t{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erow-s{font-size:12px;color:var(--t2);margin-top:2px}
+.erow-r{text-align:right;flex-shrink:0}
+.erow-tot{font-family:'DM Mono',monospace;font-size:14px;font-weight:500}
+.erow-shr{font-size:11px;color:var(--t2);margin-top:2px}
 
-/* ── NOTIFICATION ── */
-.notif-item {
-  display: flex; gap: 12px; padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.notif-item:hover { background: var(--surface2); padding-left: 8px; border-radius: 8px; }
-.notif-item:last-child { border-bottom: none; }
-.notif-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-  margin-top: 5px;
-}
-.notif-dot.read { background: var(--text3); }
-.notif-content { flex: 1; }
-.notif-text { font-size: 14px; margin-bottom: 3px; }
-.notif-time { font-size: 11px; color: var(--text3); }
+.mrow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border)}
+.mrow:last-child{border-bottom:none}
+.mrow-inf{flex:1}
+.mrow-name{font-size:14px;font-weight:500}
+.mrow-handle{font-size:12px;color:var(--t2);font-family:'DM Mono',monospace;margin-top:2px}
 
-/* ── MEMBER ROW ── */
-.member-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.member-row:last-child { border-bottom: none; }
-.member-role { font-size: 11px; color: var(--text3); }
-.member-balance-row { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 13px; }
+.brow{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--border)}
+.brow:last-child{border-bottom:none}
+.brow-inf{flex:1}
+.brow-name{font-size:14px;font-weight:500;margin-bottom:8px}
+.bbar{height:4px;background:var(--card3);border-radius:4px;overflow:hidden}
+.bbar-fill{height:100%;border-radius:4px;transition:width .5s ease}
+.brow-r{text-align:right;flex-shrink:0}
+.brow-amt{font-family:'DM Mono',monospace;font-size:15px;font-weight:500}
+.brow-lbl{font-size:11px;color:var(--t2);margin-top:3px}
+
+.nrow{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .14s}
+.nrow:last-child{border-bottom:none}
+.nrow:hover{background:rgba(255,255,255,.02)}
+.ndot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;margin-top:5px}
+.ndot.read{background:var(--t3)}
+.nrow-txt{font-size:14px;line-height:1.5}
+.nrow-time{font-size:11px;color:var(--t3);margin-top:4px}
+
+/* ── GROUP DETAIL HEADER ── */
+.gdhd{background:linear-gradient(150deg,var(--card),var(--card2));border:1px solid var(--border2);border-radius:22px;padding:22px 20px;margin-bottom:16px}
+.gdhd-em{font-size:42px;margin-bottom:10px}
+.gdhd-name{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;letter-spacing:-.5px}
+.gdhd-meta{font-size:13px;color:var(--t2);margin-top:4px}
+.gd-acts{display:flex;gap:8px;margin-top:16px}
+.gd-btn{flex:1;padding:11px 6px;background:var(--card3);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-size:13px;font-weight:500;cursor:pointer;transition:all .14s;display:flex;align-items:center;justify-content:center;gap:5px}
+.gd-btn:hover{background:var(--card2);border-color:var(--border2)}
+.gd-btn.gold{background:var(--gold-dim);border-color:rgba(245,200,66,0.25);color:var(--gold)}
 
 /* ── TABS ── */
-.tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: var(--radius-sm); margin-bottom: 24px; }
-.tab-btn {
-  flex: 1; padding: 10px; border: none; background: transparent;
-  color: var(--text2); border-radius: 8px; cursor: pointer;
-  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
-  transition: all 0.2s;
-}
-.tab-btn.active { background: var(--surface3); color: var(--text); }
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:4px;margin-bottom:16px}
+.tab{flex:1;padding:9px 4px;border:none;background:transparent;color:var(--t2);border-radius:9px;cursor:pointer;font-size:13px;font-weight:500;transition:all .18s;white-space:nowrap}
+.tab.on{background:var(--card2);color:var(--t1)}
 
-/* ── EMPTY STATE ── */
-.empty {
-  text-align: center; padding: 60px 20px;
-  color: var(--text3);
-}
-.empty-icon { font-size: 48px; margin-bottom: 12px; }
-.empty-title { font-size: 16px; font-weight: 500; color: var(--text2); margin-bottom: 6px; }
-.empty-sub { font-size: 13px; }
+/* ── NOTE ── */
+.note{background:var(--card2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:10px;animation:fadeUp .3s ease}
+.note-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.note-auth{font-size:12px;font-weight:600;color:var(--gold)}
+.note-time{font-size:11px;color:var(--t3);font-family:'DM Mono',monospace}
+.note-txt{font-size:14px;color:var(--t2);line-height:1.6}
+.note-del{background:none;border:none;color:var(--t3);font-size:15px;cursor:pointer;padding:4px;transition:color .14s}
+.note-del:hover{color:var(--red)}
 
-/* ── CHIPS ── */
-.chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 20px; padding: 4px 10px;
-  font-size: 12px; color: var(--text2);
-}
-.chip.green { background: rgba(107,255,184,0.1); border-color: rgba(107,255,184,0.3); color: var(--accent3); }
-.chip.red { background: rgba(255,107,107,0.1); border-color: rgba(255,107,107,0.3); color: var(--accent2); }
+/* ── AVATAR ── */
+.av{border-radius:50%;background:linear-gradient(135deg,var(--blue),#5078d8);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;color:#fff;flex-shrink:0}
+.av32{width:32px;height:32px;font-size:12px}
+.av40{width:40px;height:40px;font-size:15px}
+.av52{width:52px;height:52px;font-size:19px}
+.av64{width:64px;height:64px;font-size:24px}
 
-/* ── BALANCE BAR ── */
-.balance-bar {
-  height: 6px;
-  background: var(--surface3);
-  border-radius: 10px;
-  overflow: hidden;
-  margin: 8px 0;
-}
-.balance-fill {
-  height: 100%;
-  border-radius: 10px;
-  background: linear-gradient(90deg, var(--accent3), #00e87a);
-  transition: width 0.5s ease;
-}
+/* ── PROFILE ── */
+.prof-hd{background:linear-gradient(150deg,var(--card),var(--card2));border:1px solid var(--border2);border-radius:22px;padding:26px 20px;display:flex;align-items:center;gap:18px;margin-bottom:16px}
+.prof-inf{flex:1}
+.prof-name{font-family:'Syne',sans-serif;font-size:22px;font-weight:800}
+.prof-handle{font-size:13px;color:var(--gold);font-family:'DM Mono',monospace;margin-top:3px}
+.prof-email{font-size:12px;color:var(--t2);margin-top:3px}
+.prof-stats{display:flex;gap:22px;margin-top:14px}
+.ps-v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+.ps-l{font-size:11px;color:var(--t2);margin-top:2px}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:48px 20px;color:var(--t3)}
+.empty-ico{font-size:44px;margin-bottom:12px}
+.empty-t{font-size:15px;font-weight:500;color:var(--t2);margin-bottom:6px}
+.empty-s{font-size:13px}
 
 /* ── SEARCH ── */
-.search-box {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 10px 16px; margin-bottom: 16px;
-}
-.search-box input {
-  flex: 1; background: transparent; border: none; outline: none;
-  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px;
-}
-.search-box input::placeholder { color: var(--text3); }
+.search{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 16px;margin-bottom:16px}
+.search input{flex:1;background:none;border:none;outline:none;color:var(--t1);font-size:15px}
+.search input::placeholder{color:var(--t3)}
 
-/* ── ANIMATIONS ── */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* ── MODAL ── */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:1000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .22s}
+.mo.on{opacity:1;pointer-events:all}
+.modal{background:var(--card);border:1px solid var(--border2);border-radius:28px 28px 0 0;width:100%;max-width:540px;max-height:92dvh;overflow-y:auto;padding-bottom:calc(20px + var(--sb));transform:translateY(100%);transition:transform .34s cubic-bezier(.32,.72,0,1)}
+.mo.on .modal{transform:translateY(0)}
+.m-handle{width:38px;height:4px;background:var(--card3);border-radius:2px;margin:14px auto 20px}
+.m-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;padding:0 24px 4px;letter-spacing:-.3px}
+.m-body{padding:16px 24px}
+.m-foot{padding:8px 24px 0;display:flex;gap:10px}
+.btn-cancel{flex:1;padding:14px;background:transparent;border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--t2);font-size:14px;font-weight:500;cursor:pointer;transition:all .14s}
+.btn-cancel:hover{border-color:var(--border2);color:var(--t1);background:var(--card2)}
+.btn-ok{flex:1.5;padding:14px;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;border-radius:var(--r-sm);color:#0d0d14;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-ok:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(245,200,66,0.28)}
 
-/* ── LOADER ── */
-.loader {
-  width: 20px; height: 20px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-.loading-screen {
-  display: flex; align-items: center; justify-content: center;
-  height: 100vh; background: var(--bg);
-}
+/* ── SPLIT OPTS ── */
+.splits{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.so{padding:8px 14px;border:1px solid var(--border);border-radius:var(--r-xs);background:transparent;color:var(--t2);font-size:13px;cursor:pointer;transition:all .18s}
+.so.on{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
 
-/* ── SELECT ── */
-select.form-input {
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239898b8' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 40px;
-}
-select.form-input option { background: var(--surface2); color: var(--text); }
+/* ── CHIPS ── */
+.chip-g{display:inline-flex;align-items:center;gap:4px;background:rgba(61,255,160,0.09);border:1px solid rgba(61,255,160,0.2);color:var(--green);font-size:11px;font-weight:600;padding:3px 8px;border-radius:10px}
+.chip-r{display:inline-flex;align-items:center;gap:4px;background:rgba(255,107,107,0.09);border:1px solid rgba(255,107,107,0.2);color:var(--red);font-size:11px;font-weight:600;padding:3px 8px;border-radius:10px}
+.chip-gray{display:inline-flex;align-items:center;gap:4px;background:var(--card2);border:1px solid var(--border);color:var(--t2);font-size:11px;font-weight:600;padding:3px 8px;border-radius:10px}
 
-/* ── SECTION DIVIDER ── */
-.section-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  display: flex; align-items: center; gap: 10px;
-}
+/* ── BTNS ── */
+.btn-settle{padding:8px 13px;background:rgba(61,255,160,0.09);border:1px solid rgba(61,255,160,0.2);border-radius:var(--r-xs);color:var(--green);font-size:12px;font-weight:600;cursor:pointer;transition:all .14s;white-space:nowrap;margin-top:6px}
+.btn-settle:hover{background:rgba(61,255,160,0.16)}
+.btn-acc{padding:8px 14px;background:rgba(245,200,66,0.12);border:1px solid rgba(245,200,66,0.28);border-radius:var(--r-xs);color:var(--gold);font-size:12px;font-weight:600;cursor:pointer;transition:all .14s;flex-shrink:0}
+.btn-acc:hover{background:rgba(245,200,66,0.2)}
 
-/* ── TOAST ── */
-.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-.toast {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 18px;
-  font-size: 14px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-  animation: fadeUp 0.3s ease;
-  display: flex; align-items: center; gap: 10px;
-  max-width: 300px;
-}
-.toast.success { border-left: 3px solid var(--accent3); }
-.toast.error { border-left: 3px solid var(--accent2); }
-.toast.info { border-left: 3px solid var(--accent4); }
+/* ── INVITE PEND ── */
+.ipend{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--card2);border:1px dashed var(--border2);border-radius:var(--r-sm);margin-bottom:8px;font-size:13px;color:var(--t2)}
 
-/* ── PROFILE PAGE ── */
-.profile-header {
-  background: linear-gradient(135deg, var(--surface), var(--surface2));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px;
-  display: flex; align-items: center; gap: 24px;
-  margin-bottom: 24px;
-}
-.profile-stats { display: flex; gap: 32px; margin-top: 8px; }
-.profile-stat { text-align: center; }
-.profile-stat-value { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
-.profile-stat-label { font-size: 11px; color: var(--text2); }
+/* ── COLORS ── */
+.cg{color:var(--green)}.cr{color:var(--red)}.cgo{color:var(--gold)}.cb{color:var(--blue)}.ct{color:var(--t2)}
 
-/* ── GROUP DETAIL ── */
-.breadcrumb {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; color: var(--text2); margin-bottom: 24px;
-}
-.breadcrumb a { color: var(--text2); text-decoration: none; cursor: pointer; }
-.breadcrumb a:hover { color: var(--text); }
-.breadcrumb span { color: var(--text3); }
+/* ── TOASTS ── */
+.toasts{position:fixed;bottom:calc(var(--nav-h) + var(--sb) + 14px);left:16px;right:16px;z-index:9000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--card2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:13px 18px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,0.55);animation:toastIn .28s ease;pointer-events:all}
+.toast.ok{border-left:3px solid var(--green)}
+.toast.err{border-left:3px solid var(--red)}
+.toast.inf{border-left:3px solid var(--blue)}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
-/* ── CATEGORY BADGE ── */
-.cat-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; padding: 3px 8px; border-radius: 6px;
-  background: var(--surface3); color: var(--text2);
-}
+/* ── SPINNER ── */
+.spin{width:22px;height:22px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:rot .7s linear infinite;margin:28px auto}
+@keyframes rot{to{transform:rotate(360deg)}}
 
-/* ── SETTLE UP BTN ── */
-.btn-settle {
-  padding: 8px 14px;
-  background: rgba(107,255,184,0.15);
-  border: 1px solid rgba(107,255,184,0.3);
-  border-radius: 8px;
-  color: var(--accent3);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-settle:hover { background: rgba(107,255,184,0.25); }
-
-/* ── INVITE PENDING ── */
-.invite-pending {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px;
-  background: var(--surface2);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  margin-bottom: 8px;
-}
-
-/* responsive */
-@media (max-width: 768px) {
-  .sidebar { width: 0; overflow: hidden; }
-  .main { margin-left: 0; }
-  .stats-grid { grid-template-columns: 1fr; }
-  .two-col { grid-template-columns: 1fr; }
+/* ── DESKTOP ── */
+@media(min-width:768px){
+  .mo{align-items:center;padding:20px}
+  .modal{border-radius:28px;max-height:85dvh;transform:scale(.96)}
+  .mo.on .modal{transform:scale(1)}
+  #app{flex-direction:row}
+  .bnav{position:fixed;left:0;top:0;bottom:0;width:230px;height:100dvh;flex-direction:column;justify-content:flex-start;align-items:stretch;border-right:1px solid var(--border);border-top:none;padding:0 12px calc(20px + var(--sb));padding-top:calc(76px + var(--st))}
+  .ni{flex:none;width:100%;flex-direction:row;justify-content:flex-start;gap:12px;padding:12px 14px;border-radius:var(--r-sm);height:auto}
+  .ni.on{background:var(--gold-dim)}
+  .ni-lbl{font-size:14px;font-weight:500}
+  .ni-badge{top:12px;right:12px;left:auto}
+  .nfab{flex:none;width:100%;flex-direction:row;justify-content:flex-start;gap:12px;padding:12px 14px;border-radius:var(--r-sm);background:var(--gold-dim);border:1px solid rgba(245,200,66,0.18)}
+  .fab-ring{width:32px;height:32px;border-radius:9px;font-size:18px;margin-top:0}
+  .fab-lbl{font-size:14px;font-weight:600;color:var(--gold)}
+  .pages{padding-bottom:20px}
+  .topbar{padding-left:250px}
 }
 </style>
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="loading-screen" class="loading-screen">
-  <div style="text-align:center">
-    <div class="logo-icon" style="width:56px;height:56px;font-size:28px;border-radius:16px;margin:0 auto 16px;">💸</div>
-    <div class="loader" style="margin:0 auto;"></div>
-  </div>
+<!-- SPLASH -->
+<div id="splash">
+  <div class="sp-logo">💸</div>
+  <div class="sp-name">Who <b>Pays?</b></div>
+  <div class="sp-dots"><div class="sp-dot"></div><div class="sp-dot"></div><div class="sp-dot"></div></div>
 </div>
 
-<!-- AUTH SCREEN -->
-<div id="auth-screen" style="display:none">
-  <div class="auth-card">
-    <div class="app-logo">
-      <div class="logo-icon">💸</div>
+<!-- AUTH -->
+<div id="auth" style="display:none">
+  <div class="auth-orb a"></div><div class="auth-orb b"></div>
+  <div class="auth-box">
+    <div class="auth-brand">
+      <div class="auth-brand-ico">💸</div>
       <div>
-        <div class="app-name">Who <span>Pays?</span></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px;">Dividi le spese, semplicemente.</div>
+        <div class="auth-brand-name">Who <span>Pays?</span></div>
+        <div class="auth-brand-sub">Dividi le spese con amici, semplicemente.</div>
       </div>
     </div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')">Accedi</button>
-      <button class="auth-tab" onclick="switchAuthTab('register')">Registrati</button>
+    <div class="seg">
+      <button class="seg-btn on" onclick="switchTab('login')">Accedi</button>
+      <button class="seg-btn" onclick="switchTab('register')">Registrati</button>
     </div>
-    <div id="auth-error" class="auth-error"></div>
-    <!-- Login -->
-    <div id="login-form">
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" type="email" id="login-email" placeholder="la@tua.email">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <input class="form-input" type="password" id="login-pass" placeholder="••••••••">
-      </div>
-      <button class="btn-primary" onclick="doLogin()">Accedi →</button>
+    <div id="auth-err" class="auth-err"></div>
+    <div id="form-login">
+      <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="l-email" placeholder="la@tua.email" autocomplete="email"></div>
+      <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn-gold" onclick="doLogin()">Accedi →</button>
     </div>
-    <!-- Register -->
-    <div id="register-form" style="display:none">
-      <div class="form-group">
-        <label class="form-label">Nome completo</label>
-        <input class="form-input" type="text" id="reg-name" placeholder="Mario Rossi">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Username</label>
-        <input class="form-input" type="text" id="reg-username" placeholder="@mario" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" type="email" id="reg-email" placeholder="la@tua.email">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Password</label>
-        <input class="form-input" type="password" id="reg-pass" placeholder="Minimo 6 caratteri">
-      </div>
-      <button class="btn-primary" onclick="doRegister()">Crea account →</button>
+    <div id="form-reg" style="display:none">
+      <div class="fg"><label class="fl">Nome completo</label><input class="fi" type="text" id="r-name" placeholder="Mario Rossi" autocomplete="name"></div>
+      <div class="fg"><label class="fl">Username</label><input class="fi" type="text" id="r-user" placeholder="mario93" autocomplete="username" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()"></div>
+      <div class="fg"><label class="fl">Email</label><input class="fi" type="email" id="r-email" placeholder="la@tua.email" autocomplete="email"></div>
+      <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="r-pass" placeholder="Min. 6 caratteri" autocomplete="new-password"></div>
+      <button class="btn-gold" onclick="doRegister()">Crea account →</button>
     </div>
   </div>
 </div>
 
-<!-- MAIN APP -->
+<!-- APP -->
 <div id="app">
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-logo">
-        <div class="logo-icon">💸</div>
-        <div class="app-name">Who <span>Pays?</span></div>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-l">
+      <div class="tb-ico">💸</div>
+      <div class="tb-name">Who <span>Pays?</span></div>
+    </div>
+    <div class="tb-r">
+      <div class="ib" onclick="showPage('notifications')">🔔<div class="npip" id="npip"></div></div>
+      <div class="ib" onclick="showPage('profile')" id="tb-av" style="font-size:14px;font-family:'Syne',sans-serif;font-weight:700">?</div>
+    </div>
+  </div>
+
+  <!-- PAGES -->
+  <div class="pages" id="pages-wrap">
+
+    <!-- HOME -->
+    <div class="page on" id="page-home">
+      <div class="hero">
+        <div class="hero-lbl">Saldo netto</div>
+        <div class="hero-val" id="h-net">€0,00</div>
+        <div class="hero-sub" id="h-sub">Tutto in pari 🎉</div>
+        <div class="hero-stats">
+          <div class="hstat"><div class="hstat-v cg" id="h-cr">€0</div><div class="hstat-l">Crediti</div></div>
+          <div class="hstat"><div class="hstat-v cr" id="h-db">€0</div><div class="hstat-l">Debiti</div></div>
+          <div class="hstat"><div class="hstat-v cgo" id="h-gc">0</div><div class="hstat-l">Conti</div></div>
+        </div>
       </div>
-      <div class="user-pill">
-        <div class="avatar" id="sidebar-avatar">?</div>
-        <div class="user-info">
-          <div class="user-name" id="sidebar-name">—</div>
-          <div class="user-handle" id="sidebar-handle">@—</div>
+      <div class="sh"><div class="sh-t">I miei conti</div><button class="sh-a" onclick="showPage('groups')">Vedi tutti</button></div>
+      <div class="card" id="home-groups"><div class="empty"><div class="empty-ico">📂</div><div class="empty-t">Nessun conto</div><div class="empty-s">Creane uno con ＋</div></div></div>
+      <div class="sh" style="margin-top:20px"><div class="sh-t">Attività recente</div></div>
+      <div class="card" id="home-acts"><div class="empty"><div class="empty-ico">📭</div><div class="empty-t">Nessuna attività</div></div></div>
+    </div>
+
+    <!-- GROUPS -->
+    <div class="page" id="page-groups">
+      <div class="sh"><div class="sh-t">Conti 📂</div><button class="sh-a" onclick="openM('modal-new-group')">+ Nuovo</button></div>
+      <div id="groups-list"></div>
+    </div>
+
+    <!-- GROUP DETAIL -->
+    <div class="page" id="page-group-detail">
+      <div style="margin-bottom:16px"><button onclick="showPage('groups')" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-xs);padding:9px 14px;color:var(--t2);cursor:pointer;font-size:14px">← Indietro</button></div>
+      <div class="gdhd">
+        <div class="gdhd-em" id="gd-em">📂</div>
+        <div class="gdhd-name" id="gd-name">—</div>
+        <div class="gdhd-meta" id="gd-meta">—</div>
+        <div class="gd-acts">
+          <button class="gd-btn" onclick="openInviteModal()">👤 Invita</button>
+          <button class="gd-btn" onclick="openNoteModal()">📝 Nota</button>
+          <button class="gd-btn gold" onclick="openExpenseModal()">+ Spesa</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab on" onclick="gdTab('expenses')">💳 Spese</button>
+        <button class="tab" onclick="gdTab('members')">👥 Membri</button>
+        <button class="tab" onclick="gdTab('balances')">⚖️ Bilanci</button>
+        <button class="tab" onclick="gdTab('notes')">📝 Note</button>
+      </div>
+      <div id="gd-expenses"><div class="card" id="gd-exp-list"></div></div>
+      <div id="gd-members" style="display:none"><div class="card" id="gd-mem-list"></div></div>
+      <div id="gd-balances" style="display:none"><div class="card" id="gd-bal-list"></div></div>
+      <div id="gd-notes" style="display:none"><div id="gd-note-list"></div></div>
+    </div>
+
+    <!-- FRIENDS -->
+    <div class="page" id="page-friends">
+      <div class="sh"><div class="sh-t">Amici 👥</div><button class="sh-a" onclick="openM('modal-add-friend')">+ Aggiungi</button></div>
+      <div class="search"><span style="font-size:16px;color:var(--t3)">🔍</span><input placeholder="Cerca amici..." id="friends-search" oninput="loadFriends()"></div>
+      <div class="tabs">
+        <button class="tab on" onclick="friendsTab('friends')">Amici</button>
+        <button class="tab" onclick="friendsTab('requests')">Richieste <span id="req-badge" style="color:var(--gold)"></span></button>
+        <button class="tab" onclick="friendsTab('sent')">Inviati</button>
+      </div>
+      <div class="card" id="friends-list"></div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="page" id="page-notifications">
+      <div class="sh"><div class="sh-t">Notifiche 🔔</div><button class="sh-a" onclick="markAllRead()">Segna tutto letto</button></div>
+      <div class="card" id="notif-list"></div>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="page" id="page-profile">
+      <div class="sh-t" style="margin-bottom:16px">Profilo 👤</div>
+      <div class="prof-hd">
+        <div class="av av64" id="prof-av">?</div>
+        <div class="prof-inf">
+          <div class="prof-name" id="prof-name">—</div>
+          <div class="prof-handle" id="prof-handle">@—</div>
+          <div class="prof-email" id="prof-email">—</div>
+          <div class="prof-stats">
+            <div><div class="ps-v" id="ps-groups">0</div><div class="ps-l">Conti</div></div>
+            <div><div class="ps-v" id="ps-friends">0</div><div class="ps-l">Amici</div></div>
+            <div><div class="ps-v" id="ps-expenses">0</div><div class="ps-l">Spese</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="card-ht">Modifica profilo</div></div>
+        <div style="padding:16px 18px">
+          <div class="fg"><label class="fl">Nome completo</label><input class="fi" type="text" id="edit-name"></div>
+          <div class="fg"><label class="fl">Username</label><input class="fi" type="text" id="edit-user" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()"></div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button class="btn-ok" onclick="saveProfile()" style="padding:13px">💾 Salva</button>
+            <button class="btn-cancel" onclick="openM('modal-chpw')" style="padding:13px">🔑 Password</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div style="padding:16px 18px">
+          <button class="btn-cancel" onclick="doLogout()" style="width:100%;padding:13px;color:var(--red);border-color:rgba(255,107,107,0.22)">⬅ Esci dall'account</button>
         </div>
       </div>
     </div>
-    <div class="sidebar-nav">
-      <div class="nav-section-label">Principale</div>
-      <button class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
-        <span class="nav-icon">🏠</span> Dashboard
-      </button>
-      <button class="nav-item" onclick="showPage('friends')" id="nav-friends">
-        <span class="nav-icon">👥</span> Amici
-        <span class="nav-badge" id="friends-badge" style="display:none">0</span>
-      </button>
-      <button class="nav-item" onclick="showPage('notifications')" id="nav-notifications">
-        <span class="nav-icon">🔔</span> Notifiche
-        <span class="nav-badge" id="notif-badge" style="display:none">0</span>
-      </button>
-      <div class="nav-section-label">I miei conti</div>
-      <div id="sidebar-groups">
-        <div style="font-size:12px;color:var(--text3);padding:8px 12px;">Nessun conto ancora</div>
-      </div>
-      <button class="nav-item" onclick="openModal('modal-new-group')">
-        <span class="nav-icon">➕</span> Nuovo conto
-      </button>
+
+  </div><!-- /pages -->
+
+  <!-- BOTTOM NAV — 5 elementi: Home | Conti | ＋FAB | Amici | Notifiche -->
+  <nav class="bnav">
+    <button class="ni on" id="nav-home" onclick="showPage('home')">
+      <div class="ni-ico">🏠</div><div class="ni-lbl">Home</div>
+    </button>
+    <button class="ni" id="nav-groups" onclick="showPage('groups')">
+      <div class="ni-ico">📂</div><div class="ni-lbl">Conti</div>
+    </button>
+    <button class="nfab" onclick="openM('modal-add-expense')">
+      <div class="fab-ring">＋</div>
+      <div class="fab-lbl">Spesa</div>
+    </button>
+    <button class="ni" id="nav-friends" onclick="showPage('friends')">
+      <div class="ni-ico">👥</div><div class="ni-lbl">Amici</div>
+      <div class="ni-badge" id="badge-fr"></div>
+    </button>
+    <button class="ni" id="nav-notifications" onclick="showPage('notifications')">
+      <div class="ni-ico">🔔</div><div class="ni-lbl">Notifiche</div>
+      <div class="ni-badge" id="badge-no"></div>
+    </button>
+  </nav>
+
+</div><!-- /app -->
+
+<!-- ── MODALS ── -->
+<div class="mo" id="modal-new-group">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">📂 Nuovo conto</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Nome</label><input class="fi" type="text" id="ng-name" placeholder="es. Vacanza in Sardegna"></div>
+    <div class="fg"><label class="fl">Categoria</label>
+      <select class="fi" id="ng-cat"><option value="✈️">✈️ Viaggio</option><option value="🏠">🏠 Casa</option><option value="🎉">🎉 Festa</option><option value="🍕">🍕 Cibo</option><option value="🏋️">🏋️ Sport</option><option value="💼">💼 Lavoro</option><option value="📦">📦 Altro</option></select>
     </div>
-    <div class="sidebar-footer">
-      <button class="nav-item" onclick="showPage('profile')" id="nav-profile" style="margin-bottom:8px">
-        <span class="nav-icon">👤</span> Profilo
-      </button>
-      <button class="btn-logout" onclick="doLogout()">⬅ Esci</button>
+    <div class="fg"><label class="fl">Descrizione</label><input class="fi" type="text" id="ng-desc" placeholder="Opzionale..."></div>
+    <div class="fg"><label class="fl">Valuta</label>
+      <select class="fi" id="ng-cur"><option value="€">€ Euro</option><option value="$">$ Dollaro</option><option value="£">£ Sterlina</option><option value="CHF">CHF Franco</option></select>
     </div>
-  </aside>
-
-  <!-- MAIN -->
-  <main class="main">
-    <div class="main-content">
-
-      <!-- ── DASHBOARD ── -->
-      <div id="page-dashboard">
-        <div class="topbar">
-          <div>
-            <div class="page-title">Dashboard 🏠</div>
-            <div class="page-subtitle" id="dashboard-greeting">Buongiorno!</div>
-          </div>
-          <div class="topbar-actions">
-            <button class="btn-secondary" onclick="openModal('modal-add-expense')">
-              ➕ Aggiungi spesa
-            </button>
-            <button class="btn-accent" onclick="openModal('modal-new-group')">
-              📂 Nuovo conto
-            </button>
-          </div>
-        </div>
-        <div class="stats-grid" id="stats-grid">
-          <div class="stat-card green">
-            <div class="stat-label">Totale crediti</div>
-            <div class="stat-value" id="stat-credits">€0</div>
-            <div class="stat-change">Quanto ti devono</div>
-          </div>
-          <div class="stat-card red">
-            <div class="stat-label">Totale debiti</div>
-            <div class="stat-value" id="stat-debits">€0</div>
-            <div class="stat-change">Quanto devi agli altri</div>
-          </div>
-          <div class="stat-card blue">
-            <div class="stat-label">Saldo netto</div>
-            <div class="stat-value" id="stat-net">€0</div>
-            <div class="stat-change">Bilancio complessivo</div>
-          </div>
-        </div>
-        <div class="two-col">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Attività recente</div>
-              <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="showPage('dashboard')">Vedi tutto</button>
-            </div>
-            <div class="card-body" id="recent-activity">
-              <div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Nessuna attività</div><div class="empty-sub">Le spese aggiunte appariranno qui</div></div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">I miei conti</div>
-              <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="openModal('modal-new-group')">+ Nuovo</button>
-            </div>
-            <div class="card-body" id="groups-overview">
-              <div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Nessun conto</div><div class="empty-sub">Crea un conto per iniziare a dividere le spese</div></div>
-            </div>
-          </div>
-        </div>
-        <div class="card" style="margin-top:16px">
-          <div class="card-header">
-            <div class="card-title">Bilanci con gli amici</div>
-          </div>
-          <div class="card-body" id="friend-balances">
-            <div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Aggiungi amici</div><div class="empty-sub">Inizia ad aggiungere amici per vedere i bilanci</div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── GROUPS LIST ── -->
-      <div id="page-groups" style="display:none">
-        <div class="topbar">
-          <div><div class="page-title">I miei conti 📂</div><div class="page-subtitle">Gestisci tutti i tuoi conti condivisi</div></div>
-          <div class="topbar-actions">
-            <button class="btn-accent" onclick="openModal('modal-new-group')">+ Nuovo conto</button>
-          </div>
-        </div>
-        <div id="groups-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>
-      </div>
-
-      <!-- ── GROUP DETAIL ── -->
-      <div id="page-group-detail" style="display:none">
-        <div class="breadcrumb">
-          <a onclick="showPage('dashboard')">🏠 Dashboard</a>
-          <span>›</span>
-          <span id="gd-breadcrumb">Conto</span>
-        </div>
-        <div class="topbar">
-          <div style="display:flex;align-items:center;gap:16px">
-            <div id="gd-emoji" style="font-size:42px"></div>
-            <div>
-              <div class="page-title" id="gd-name"></div>
-              <div class="page-subtitle" id="gd-members-count"></div>
-            </div>
-          </div>
-          <div class="topbar-actions">
-            <button class="btn-secondary" onclick="openInviteModal()">👤+ Invita</button>
-            <button class="btn-secondary" onclick="openNoteModal()">📝 Nota</button>
-            <button class="btn-accent" onclick="openExpenseModal()">+ Spesa</button>
-          </div>
-        </div>
-        <div class="tabs">
-          <button class="tab-btn active" onclick="switchGroupTab('expenses')">💳 Spese</button>
-          <button class="tab-btn" onclick="switchGroupTab('members')">👥 Membri</button>
-          <button class="tab-btn" onclick="switchGroupTab('balances')">⚖️ Bilanci</button>
-          <button class="tab-btn" onclick="switchGroupTab('notes')">📝 Note</button>
-        </div>
-        <div id="gd-expenses"><div class="card"><div class="card-body" id="gd-expense-list"><div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Nessuna spesa</div><div class="empty-sub">Aggiungi la prima spesa al conto</div></div></div></div></div>
-        <div id="gd-members" style="display:none"><div class="card"><div class="card-body" id="gd-member-list"></div></div></div>
-        <div id="gd-balances" style="display:none"><div class="card"><div class="card-body" id="gd-balance-list"></div></div></div>
-        <div id="gd-notes" style="display:none"><div id="gd-note-list"></div></div>
-      </div>
-
-      <!-- ── FRIENDS ── -->
-      <div id="page-friends" style="display:none">
-        <div class="topbar">
-          <div><div class="page-title">Amici 👥</div><div class="page-subtitle">Le tue connessioni su Who Pays?</div></div>
-          <div class="topbar-actions">
-            <button class="btn-accent" onclick="openModal('modal-add-friend')">+ Aggiungi amico</button>
-          </div>
-        </div>
-        <div class="search-box">
-          <span>🔍</span>
-          <input placeholder="Cerca amici..." oninput="filterFriends(this.value)">
-        </div>
-        <div class="tabs">
-          <button class="tab-btn active" onclick="switchFriendsTab('friends')">Amici</button>
-          <button class="tab-btn" onclick="switchFriendsTab('requests')">Richieste <span id="req-count" style="color:var(--accent)"></span></button>
-          <button class="tab-btn" onclick="switchFriendsTab('sent')">Inviti inviati</button>
-        </div>
-        <div class="card">
-          <div class="card-body" id="friends-list"><div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico ancora</div><div class="empty-sub">Inizia aggiungendo i tuoi amici</div></div></div>
-        </div>
-      </div>
-
-      <!-- ── NOTIFICATIONS ── -->
-      <div id="page-notifications" style="display:none">
-        <div class="topbar">
-          <div><div class="page-title">Notifiche 🔔</div><div class="page-subtitle">Aggiornamenti e attività recenti</div></div>
-          <div class="topbar-actions">
-            <button class="btn-secondary" onclick="markAllRead()">✓ Segna tutto come letto</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-body" id="notif-list">
-            <div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">Nessuna notifica</div><div class="empty-sub">Sei in pari con tutto!</div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── PROFILE ── -->
-      <div id="page-profile" style="display:none">
-        <div class="page-title" style="margin-bottom:24px">Il mio profilo 👤</div>
-        <div class="profile-header">
-          <div class="avatar lg" id="profile-avatar">?</div>
-          <div style="flex:1">
-            <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800" id="profile-name">—</div>
-            <div style="font-family:'DM Mono',monospace;font-size:14px;color:var(--accent);margin:4px 0" id="profile-handle">@—</div>
-            <div style="font-size:13px;color:var(--text2)" id="profile-email">—</div>
-            <div class="profile-stats" id="profile-stats">
-              <div class="profile-stat"><div class="profile-stat-value" id="ps-groups">0</div><div class="profile-stat-label">Conti</div></div>
-              <div class="profile-stat"><div class="profile-stat-value" id="ps-friends">0</div><div class="profile-stat-label">Amici</div></div>
-              <div class="profile-stat"><div class="profile-stat-value" id="ps-expenses">0</div><div class="profile-stat-label">Spese</div></div>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Modifica profilo</div></div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Nome completo</label>
-              <input class="form-input" type="text" id="edit-name" placeholder="Il tuo nome">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Username</label>
-              <input class="form-input" type="text" id="edit-username" placeholder="@username" oninput="this.value=this.value.replace(/[^a-z0-9_]/gi,'').toLowerCase()">
-            </div>
-            <div style="display:flex;gap:10px;margin-top:8px">
-              <button class="btn-accent" onclick="saveProfile()">💾 Salva</button>
-              <button class="btn-secondary" onclick="openModal('modal-change-pass')">🔑 Cambia password</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </main>
-</div>
-
-<!-- ────── MODALS ────── -->
-
-<!-- New Group -->
-<div class="modal-overlay" id="modal-new-group">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">📂 Nuovo conto</div>
-      <button class="modal-close" onclick="closeModal('modal-new-group')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Nome del conto</label>
-        <input class="form-input" type="text" id="new-group-name" placeholder="es. Vacanza in Sardegna">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Categoria</label>
-        <select class="form-input" id="new-group-category">
-          <option value="✈️">✈️ Viaggio</option>
-          <option value="🏠">🏠 Casa</option>
-          <option value="🎉">🎉 Festa / Evento</option>
-          <option value="🍕">🍕 Cibo</option>
-          <option value="🏋️">🏋️ Sport</option>
-          <option value="💼">💼 Lavoro</option>
-          <option value="📦">📦 Altro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Descrizione (opzionale)</label>
-        <input class="form-input" type="text" id="new-group-desc" placeholder="Breve descrizione...">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Valuta</label>
-        <select class="form-input" id="new-group-currency">
-          <option value="€">€ Euro</option>
-          <option value="$">$ Dollaro USA</option>
-          <option value="£">£ Sterlina</option>
-          <option value="CHF">CHF Franco Svizzero</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-new-group')">Annulla</button>
-      <button class="btn-accent" onclick="createGroup()">Crea conto ✓</button>
-    </div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-new-group')">Annulla</button><button class="btn-ok" onclick="createGroup()">Crea ✓</button></div>
   </div>
 </div>
 
-<!-- Add Expense -->
-<div class="modal-overlay" id="modal-add-expense">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">💳 Aggiungi spesa</div>
-      <button class="modal-close" onclick="closeModal('modal-add-expense')">✕</button>
+<div class="mo" id="modal-add-expense">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">💳 Aggiungi spesa</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Descrizione</label><input class="fi" type="text" id="ex-title" placeholder="es. Cena al ristorante"></div>
+    <div class="fg"><label class="fl">Importo</label><input class="fi" type="number" id="ex-amount" placeholder="0,00" step="0.01" min="0" inputmode="decimal"></div>
+    <div class="fg"><label class="fl">Conto</label><select class="fi" id="ex-group" onchange="populatePayer(this.value)"></select></div>
+    <div class="fg"><label class="fl">Chi ha pagato?</label><select class="fi" id="ex-payer"></select></div>
+    <div class="fg"><label class="fl">Categoria</label>
+      <select class="fi" id="ex-cat"><option value="🍕">🍕 Cibo & Bevande</option><option value="🏨">🏨 Alloggio</option><option value="✈️">✈️ Trasporto</option><option value="🎭">🎭 Entertainment</option><option value="🛒">🛒 Spesa</option><option value="💊">💊 Salute</option><option value="📦">📦 Altro</option></select>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Descrizione</label>
-        <input class="form-input" type="text" id="exp-title" placeholder="es. Cena al ristorante">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Importo (€)</label>
-        <input class="form-input" type="number" id="exp-amount" placeholder="0.00" step="0.01" min="0">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Conto</label>
-        <select class="form-input" id="exp-group"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Chi ha pagato?</label>
-        <select class="form-input" id="exp-payer"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Categoria</label>
-        <select class="form-input" id="exp-category">
-          <option value="🍕">🍕 Cibo & Bevande</option>
-          <option value="🏨">🏨 Alloggio</option>
-          <option value="✈️">✈️ Trasporto</option>
-          <option value="🎭">🎭 Entertainment</option>
-          <option value="🛒">🛒 Spesa</option>
-          <option value="💊">💊 Salute</option>
-          <option value="📦">📦 Altro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Divisione</label>
-        <div class="split-options">
-          <button class="split-opt active" onclick="setSplitType('equal')">⚖️ Uguale</button>
-          <button class="split-opt" onclick="setSplitType('percentage')">% Percentuale</button>
-          <button class="split-opt" onclick="setSplitType('custom')">✏️ Personalizzato</button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Data</label>
-        <input class="form-input" type="date" id="exp-date">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Note (opzionale)</label>
-        <input class="form-input" type="text" id="exp-note" placeholder="Aggiungi una nota...">
-      </div>
+    <div class="fg"><label class="fl">Divisione</label>
+      <div class="splits"><button class="so on" onclick="setSplit('equal')">⚖️ Uguale</button><button class="so" onclick="setSplit('percentage')">% Percentuale</button><button class="so" onclick="setSplit('custom')">✏️ Custom</button></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-add-expense')">Annulla</button>
-      <button class="btn-accent" onclick="addExpense()">Aggiungi ✓</button>
-    </div>
+    <div class="fg"><label class="fl">Data</label><input class="fi" type="date" id="ex-date"></div>
+    <div class="fg"><label class="fl">Note</label><input class="fi" type="text" id="ex-note" placeholder="Opzionale..."></div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-add-expense')">Annulla</button><button class="btn-ok" onclick="addExpense()">Aggiungi ✓</button></div>
   </div>
 </div>
 
-<!-- Add Friend -->
-<div class="modal-overlay" id="modal-add-friend">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">👥 Aggiungi amico</div>
-      <button class="modal-close" onclick="closeModal('modal-add-friend')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Username o Email</label>
-        <input class="form-input" type="text" id="friend-search-input" placeholder="@username o email@esempio.com">
-      </div>
-      <div id="friend-search-result" style="margin-top:12px"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-add-friend')">Annulla</button>
-      <button class="btn-accent" onclick="searchAndAddFriend()">🔍 Cerca e invia richiesta</button>
-    </div>
+<div class="mo" id="modal-add-friend">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">👥 Aggiungi amico</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Username o Email</label><input class="fi" type="text" id="af-input" placeholder="@username o email@..."></div>
+    <div id="af-result" style="margin-top:12px"></div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-add-friend')">Chiudi</button><button class="btn-ok" onclick="searchFriend()">🔍 Cerca</button></div>
   </div>
 </div>
 
-<!-- Invite to Group -->
-<div class="modal-overlay" id="modal-invite-group">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">👤+ Invita al conto</div>
-      <button class="modal-close" onclick="closeModal('modal-invite-group')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Cerca per username o email</label>
-        <input class="form-input" type="text" id="invite-search-input" placeholder="@username o email">
-      </div>
-      <div id="invite-search-result" style="margin-top:12px"></div>
-      <div id="invite-friends-list" style="margin-top:16px">
-        <div class="form-label" style="margin-bottom:8px">Oppure scegli tra i tuoi amici:</div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-invite-group')">Chiudi</button>
-    </div>
+<div class="mo" id="modal-invite">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">👤 Invita al conto</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Cerca utente</label><input class="fi" type="text" id="inv-input" placeholder="@username o email" oninput="searchInvite(this.value)"></div>
+    <div id="inv-result" style="margin-top:8px"></div>
+    <div id="inv-friends" style="margin-top:16px"></div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-invite')" style="flex:1">Chiudi</button></div>
   </div>
 </div>
 
-<!-- Add Note -->
-<div class="modal-overlay" id="modal-add-note">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">📝 Aggiungi nota</div>
-      <button class="modal-close" onclick="closeModal('modal-add-note')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Nota</label>
-        <textarea class="form-input" id="note-text" rows="4" placeholder="Scrivi una nota per lo storico del conto..." style="resize:vertical"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-add-note')">Annulla</button>
-      <button class="btn-accent" onclick="addNote()">Aggiungi nota ✓</button>
-    </div>
+<div class="mo" id="modal-note">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">📝 Aggiungi nota</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Nota</label><textarea class="fi" id="note-txt" rows="4" placeholder="Scrivi una nota per lo storico..." style="resize:vertical"></textarea></div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-note')">Annulla</button><button class="btn-ok" onclick="addNote()">Aggiungi ✓</button></div>
   </div>
 </div>
 
-<!-- Settle Up -->
-<div class="modal-overlay" id="modal-settle">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">✅ Salda il debito</div>
-      <button class="modal-close" onclick="closeModal('modal-settle')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="settle-info" style="text-align:center;padding:20px 0">
-        <div style="font-size:48px;margin-bottom:12px">💸</div>
-        <div style="font-size:18px;font-weight:500;margin-bottom:8px" id="settle-text">—</div>
-        <div style="font-size:13px;color:var(--text2)">Conferma il pagamento per aggiornare i bilanci</div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-settle')">Annulla</button>
-      <button class="btn-accent" onclick="confirmSettle()">Conferma pagamento ✓</button>
-    </div>
+<div class="mo" id="modal-settle">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">✅ Salda debito</div>
+  <div class="m-body" style="text-align:center;padding:28px">
+    <div style="font-size:56px;margin-bottom:14px">💸</div>
+    <div style="font-size:17px;font-weight:500;margin-bottom:8px" id="settle-txt">—</div>
+    <div style="font-size:13px;color:var(--t2)">Conferma per aggiornare i bilanci</div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-settle')">Annulla</button><button class="btn-ok" onclick="confirmSettle()">Conferma ✓</button></div>
   </div>
 </div>
 
-<!-- Change Password -->
-<div class="modal-overlay" id="modal-change-pass">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">🔑 Cambia password</div>
-      <button class="modal-close" onclick="closeModal('modal-change-pass')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Nuova password</label>
-        <input class="form-input" type="password" id="new-pass" placeholder="Minimo 6 caratteri">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Conferma password</label>
-        <input class="form-input" type="password" id="conf-pass" placeholder="Ripeti la password">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modal-change-pass')">Annulla</button>
-      <button class="btn-accent" onclick="changePassword()">Aggiorna ✓</button>
-    </div>
+<div class="mo" id="modal-chpw">
+  <div class="modal"><div class="m-handle"></div><div class="m-title">🔑 Cambia password</div>
+  <div class="m-body">
+    <div class="fg"><label class="fl">Nuova password</label><input class="fi" type="password" id="pw-new" placeholder="Min. 6 caratteri"></div>
+    <div class="fg"><label class="fl">Conferma</label><input class="fi" type="password" id="pw-conf" placeholder="Ripeti la password"></div>
+  </div>
+  <div class="m-foot"><button class="btn-cancel" onclick="closeM('modal-chpw')">Annulla</button><button class="btn-ok" onclick="changePassword()">Aggiorna ✓</button></div>
   </div>
 </div>
 
-<!-- Toast -->
-<div class="toast-container" id="toast-container"></div>
+<div class="toasts" id="toasts"></div>
 
-<!-- ────── FIREBASE ────── -->
+<!-- ── FIREBASE ── -->
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, collection, query, where, orderBy, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, Timestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import{getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged,updatePassword}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import{getFirestore,doc,setDoc,getDoc,getDocs,addDoc,updateDoc,deleteDoc,collection,query,where,orderBy,onSnapshot,serverTimestamp,arrayUnion,arrayRemove}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCJEsBOf-2UnMcJVOzYquOSUk3JRKjTUQ0",
-  authDomain: "who-pays-d415e.firebaseapp.com",
-  projectId: "who-pays-d415e",
-  storageBucket: "who-pays-d415e.firebasestorage.app",
-  messagingSenderId: "970598646210",
-  appId: "1:970598646210:web:dc6ca7e9095620f591165b",
-  measurementId: "G-6DHM88852Z"
+const fbApp=initializeApp({apiKey:"AIzaSyCJEsBOf-2UnMcJVOzYquOSUk3JRKjTUQ0",authDomain:"who-pays-d415e.firebaseapp.com",projectId:"who-pays-d415e",storageBucket:"who-pays-d415e.firebasestorage.app",messagingSenderId:"970598646210",appId:"1:970598646210:web:dc6ca7e9095620f591165b",measurementId:"G-6DHM88852Z"});
+const auth=getAuth(fbApp),db=getFirestore(fbApp);
+
+let me=null,myProfile=null,myGroups=[],activeGroup=null,settleData=null,splitType='equal',unsubs=[],friendTab='friends';
+
+// UTILS
+window.toast=(msg,t='inf')=>{
+  const c=document.getElementById('toasts'),el=document.createElement('div');
+  el.className=`toast ${t}`;
+  el.innerHTML=`<span>${{ok:'✅',err:'❌',inf:'ℹ️'}[t]}</span><span>${msg}</span>`;
+  c.appendChild(el);setTimeout(()=>el.remove(),4000);
+};
+const ini=(n='?')=>n.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
+const eur=(n)=>'€'+Math.abs(parseFloat(n)||0).toFixed(2);
+const fmtTs=(ts)=>{if(!ts)return'';const d=ts.toDate?ts.toDate():new Date(ts);return d.toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})};
+const fmtDM=(s)=>{if(!s)return{d:'—',m:''};const[,m,d]=s.split('-');return{d,m:['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'][+m-1]||''}};
+
+// INSTALL PROMPT (Android/Chrome)
+let _deferredInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();_deferredInstall=e;
+  setTimeout(()=>{
+    const c=document.getElementById('toasts'),t=document.createElement('div');
+    t.className='toast inf';t.style.cssText='cursor:pointer;align-items:flex-start;gap:12px';
+    t.innerHTML='<span style="font-size:22px">📲</span><div><div style="font-weight:600;margin-bottom:3px">Installa Who Pays?</div><div style="font-size:12px;color:var(--t2)">Aggiungila alla schermata Home</div></div>';
+    t.onclick=()=>{_deferredInstall.prompt();t.remove()};
+    c.appendChild(t);setTimeout(()=>t.remove(),9000);
+  },2500);
+});
+window.addEventListener('appinstalled',()=>toast('App installata con successo! 🎉','ok'));
+
+// MODAL
+window.openM=(id)=>{if(id==='modal-add-expense')prepExp();document.getElementById(id).classList.add('on')};
+window.closeM=(id)=>document.getElementById(id).classList.remove('on');
+document.querySelectorAll('.mo').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on')}));
+
+// AUTH
+window.switchTab=(t)=>{
+  document.querySelectorAll('.seg-btn').forEach((b,i)=>b.classList.toggle('on',i===(t==='login'?0:1)));
+  document.getElementById('form-login').style.display=t==='login'?'':'none';
+  document.getElementById('form-reg').style.display=t==='register'?'':'none';
+  document.getElementById('auth-err').style.display='none';
+};
+const authErr=(m)=>{const e=document.getElementById('auth-err');e.textContent=m;e.style.display='block'};
+
+window.doLogin=async()=>{
+  const email=document.getElementById('l-email').value.trim(),pass=document.getElementById('l-pass').value;
+  if(!email||!pass)return authErr('Inserisci email e password');
+  try{await signInWithEmailAndPassword(auth,email,pass)}
+  catch(e){const m={'auth/user-not-found':'Utente non trovato','auth/wrong-password':'Password errata','auth/invalid-credential':'Credenziali non valide','auth/invalid-email':'Email non valida'};authErr(m[e.code]||'Errore: '+e.message)}
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// ── STATE ──
-let currentUser = null;
-let userProfile = null;
-let myGroups = [];
-let myFriends = [];
-let activeGroup = null;
-let currentGroupTab = 'expenses';
-let currentFriendsTab = 'friends';
-let settleData = null;
-let splitType = 'equal';
-let unsubscribers = [];
-
-// ── HELPERS ──
-window.toast = (msg, type='info') => {
-  const c = document.getElementById('toast-container');
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  const icons = {success:'✅', error:'❌', info:'ℹ️'};
-  t.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
-  c.appendChild(t);
-  setTimeout(()=>t.remove(), 4000);
+window.doRegister=async()=>{
+  const name=document.getElementById('r-name').value.trim(),uname=document.getElementById('r-user').value.trim().toLowerCase(),email=document.getElementById('r-email').value.trim(),pass=document.getElementById('r-pass').value;
+  if(!name||!uname||!email||!pass)return authErr('Compila tutti i campi');
+  if(uname.length<3)return authErr('Username troppo corto');
+  try{
+    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    const uq=query(collection(db,'users'),where('username','==',uname));
+    const uSnap=await getDocs(uq);
+    if(!uSnap.empty){await cred.user.delete();return authErr('Username già in uso')}
+    await setDoc(doc(db,'users',cred.user.uid),{uid:cred.user.uid,name,username:uname,email,friends:[],friendRequests:[],sentRequests:[],createdAt:serverTimestamp()});
+  }catch(e){const m={'auth/email-already-in-use':'Email già in uso','auth/weak-password':'Password troppo debole','auth/invalid-email':'Email non valida'};authErr(m[e.code]||'Errore: '+e.message)}
 };
 
-const fmt = (n) => {
-  const v = parseFloat(n)||0;
-  return (v>=0?'+':'') + '€' + Math.abs(v).toFixed(2);
-};
-const fmtAmt = (n) => '€' + parseFloat(n||0).toFixed(2);
+window.doLogout=async()=>{unsubs.forEach(u=>u());unsubs=[];await signOut(auth)};
 
-const initials = (name='?') => name.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-
-const ts2date = (ts) => {
-  if(!ts) return '—';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleDateString('it-IT', {day:'2-digit', month:'short'});
-};
-
-const tsShort = (ts) => {
-  if(!ts) return '';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleString('it-IT', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
-};
-
-// ── MODAL ──
-window.openModal = (id) => { document.getElementById(id).classList.add('open'); };
-window.closeModal = (id) => { document.getElementById(id).classList.remove('open'); };
-document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
-
-// ── AUTH TAB ──
-window.switchAuthTab = (tab) => {
-  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.auth-tab')[tab==='login'?0:1].classList.add('active');
-  document.getElementById('login-form').style.display = tab==='login' ? '' : 'none';
-  document.getElementById('register-form').style.display = tab==='register' ? '' : 'none';
-  document.getElementById('auth-error').style.display = 'none';
-};
-
-const showAuthError = (msg) => {
-  const el = document.getElementById('auth-error');
-  el.textContent = msg;
-  el.style.display = 'block';
-};
-
-// ── LOGIN ──
-window.doLogin = async () => {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  if(!email||!pass) return showAuthError('Inserisci email e password');
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-  } catch(e) {
-    const msgs = { 'auth/user-not-found':'Utente non trovato', 'auth/wrong-password':'Password errata', 'auth/invalid-email':'Email non valida', 'auth/invalid-credential':'Credenziali non valide' };
-    showAuthError(msgs[e.code]||'Errore di accesso: '+e.message);
-  }
-};
-
-// ── REGISTER ──
-window.doRegister = async () => {
-  const name = document.getElementById('reg-name').value.trim();
-  const username = document.getElementById('reg-username').value.trim().toLowerCase();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-
-  if(!name||!username||!email||!pass) return showAuthError('Compila tutti i campi');
-  if(username.length < 3) return showAuthError('Username troppo corto (min 3 caratteri)');
-
-  try {
-    // 1. Prima crea l'account Auth (ora siamo autenticati)
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-
-    // 2. Ora possiamo fare la query su Firestore
-    const uq = query(collection(db,'users'), where('username','==',username));
-    const uSnap = await getDocs(uq);
-    if(!uSnap.empty) {
-      // Username già in uso — elimina l'account appena creato e mostra errore
-      await cred.user.delete();
-      return showAuthError('Username già in uso');
-    }
-
-    // 3. Scrivi il profilo
-    await setDoc(doc(db,'users', cred.user.uid), {
-      uid: cred.user.uid,
-      name,
-      username,
-      email,
-      friends: [],
-      friendRequests: [],
-      sentRequests: [],
-      createdAt: serverTimestamp()
-    });
-
-  } catch(e) {
-    console.error('ERRORE:', e);
-    const msgs = {
-      'auth/email-already-in-use': 'Email già in uso',
-      'auth/weak-password': 'Password troppo debole (min 6 caratteri)',
-      'auth/invalid-email': 'Email non valida'
-    };
-    showAuthError(msgs[e.code] || 'Errore: ' + e.message);
-  }
-};
-
-// ── LOGOUT ──
-window.doLogout = async () => { unsubAll(); await signOut(auth); };
-
-const unsubAll = () => { unsubscribers.forEach(u=>u()); unsubscribers=[]; };
-
-// ── AUTH STATE ──
-onAuthStateChanged(auth, async (user) => {
-  document.getElementById('loading-screen').style.display = 'none';
-  if(user) {
-    currentUser = user;
-    await loadUserProfile();
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
+onAuthStateChanged(auth,async(user)=>{
+  document.getElementById('splash').style.display='none';
+  if(user){
+    me=user;
+    const s=await getDoc(doc(db,'users',me.uid));
+    myProfile=s.exists()?s.data():{name:me.email,username:'user',email:me.email};
+    document.getElementById('auth').style.display='none';
+    document.getElementById('app').style.display='flex';
     initApp();
-  } else {
-    currentUser = null; userProfile = null;
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
+  }else{
+    me=null;myProfile=null;
+    document.getElementById('auth').style.display='flex';
+    document.getElementById('app').style.display='none';
   }
 });
 
-const loadUserProfile = async () => {
-  const snap = await getDoc(doc(db,'users',currentUser.uid));
-  userProfile = snap.exists() ? snap.data() : { name: currentUser.email, username: 'user', email: currentUser.email };
+const initApp=()=>{
+  setupTopbar();subscribeGroups();subscribeNotifs();
+  document.getElementById('ex-date').value=new Date().toISOString().split('T')[0];
+  showPage('home');
 };
 
-const initApp = () => {
-  setupSidebar();
-  setupDashboard();
-  subscribeGroups();
-  subscribeNotifications();
-  setExpenseDate();
-  showPage('dashboard');
+const setupTopbar=()=>{
+  const av=ini(myProfile.name);
+  document.getElementById('tb-av').textContent=av;
+  document.getElementById('prof-av').textContent=av;
+  document.getElementById('prof-name').textContent=myProfile.name;
+  document.getElementById('prof-handle').textContent='@'+myProfile.username;
+  document.getElementById('prof-email').textContent=myProfile.email||me.email;
+  document.getElementById('edit-name').value=myProfile.name;
+  document.getElementById('edit-user').value=myProfile.username;
 };
 
-const setupSidebar = () => {
-  const ini = initials(userProfile.name);
-  document.getElementById('sidebar-avatar').textContent = ini;
-  document.getElementById('sidebar-name').textContent = userProfile.name;
-  document.getElementById('sidebar-handle').textContent = '@'+userProfile.username;
-  document.getElementById('profile-avatar').textContent = ini;
-  document.getElementById('profile-name').textContent = userProfile.name;
-  document.getElementById('profile-handle').textContent = '@'+userProfile.username;
-  document.getElementById('profile-email').textContent = userProfile.email||currentUser.email;
-  document.getElementById('edit-name').value = userProfile.name;
-  document.getElementById('edit-username').value = userProfile.username;
-  const h = new Date().getHours();
-  document.getElementById('dashboard-greeting').textContent =
-    h<12 ? `Buongiorno, ${userProfile.name.split(' ')[0]}! ☀️` :
-    h<18 ? `Buon pomeriggio, ${userProfile.name.split(' ')[0]}! 🌤` :
-    `Buonasera, ${userProfile.name.split(' ')[0]}! 🌙`;
+// PAGES
+const PAGES=['home','groups','group-detail','friends','notifications','profile'];
+window.showPage=(p)=>{
+  PAGES.forEach(id=>{const el=document.getElementById('page-'+id);if(el){el.classList.remove('on');el.style.display='none'}});
+  const el=document.getElementById('page-'+p);
+  if(el){el.style.display='block';requestAnimationFrame(()=>el.classList.add('on'))}
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
+  const nav=document.getElementById('nav-'+p);if(nav)nav.classList.add('on');
+  document.getElementById('pages-wrap').scrollTop=0;
+  if(p==='friends')loadFriends();
+  if(p==='profile')loadProfileStats();
+  if(p==='notifications')loadNotifs();
+  if(p==='groups')renderGroupsList();
 };
 
-const setExpenseDate = () => {
-  document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+// GROUPS
+const subscribeGroups=()=>{
+  const q=query(collection(db,'groups'),where('members','array-contains',me.uid));
+  const u=onSnapshot(q,snap=>{myGroups=snap.docs.map(d=>({id:d.id,...d.data()}));renderHome();renderGroupsList()});
+  unsubs.push(u);
 };
 
-// ── PAGES ──
-const pages = ['dashboard','groups','group-detail','friends','notifications','profile'];
-window.showPage = (page) => {
-  pages.forEach(p => { const el = document.getElementById('page-'+p); if(el) el.style.display='none'; });
-  const el = document.getElementById('page-'+page);
-  if(el) { el.style.display=''; el.style.animation='fadeUp 0.4s ease'; }
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  const nav = document.getElementById('nav-'+page);
-  if(nav) nav.classList.add('active');
-  if(page==='friends') loadFriendsPage();
-  if(page==='profile') loadProfilePage();
-  if(page==='notifications') loadNotificationsPage();
+// HOME
+const renderHome=async()=>{
+  document.getElementById('h-gc').textContent=myGroups.length;
+  const gEl=document.getElementById('home-groups');
+  if(!myGroups.length)gEl.innerHTML='<div class="empty"><div class="empty-ico">📂</div><div class="empty-t">Nessun conto</div><div class="empty-s">Creane uno con ＋</div></div>';
+  else gEl.innerHTML=myGroups.slice(0,4).map(g=>`<div class="grow" onclick="openGroup('${g.id}')"><div class="grow-em">${g.emoji||'📂'}</div><div class="grow-inf"><div class="grow-name">${g.name}</div><div class="grow-sub">${(g.memberNames||[]).slice(0,3).join(', ')||'—'}</div></div><span style="color:var(--t3);font-size:18px">›</span></div>`).join('');
+  let cr=0,dbt=0;
+  for(const g of myGroups){const s=await getDocs(query(collection(db,'groups',g.id,'expenses'),where('settled','==',false)));s.forEach(d=>{const e=d.data(),p=e.amount/((e.members||[]).length||1);if(e.paidBy===me.uid)cr+=p*((e.members||[]).filter(m=>m!==me.uid).length);else if((e.members||[]).includes(me.uid))dbt+=p})}
+  const net=cr-dbt;
+  document.getElementById('h-cr').textContent=eur(cr);
+  document.getElementById('h-db').textContent=eur(dbt);
+  document.getElementById('h-net').textContent=(net>=0?'+':'-')+eur(Math.abs(net));
+  document.getElementById('h-net').style.color=net>0?'var(--green)':net<0?'var(--red)':'var(--t1)';
+  document.getElementById('h-sub').textContent=net>0?`Sei in credito di ${eur(net)} 🎉`:net<0?`Devi ancora ${eur(Math.abs(net))} 😅`:'Tutto in pari 🎉';
+  let acts=[];
+  for(const g of myGroups){const s=await getDocs(query(collection(db,'groups',g.id,'expenses'),orderBy('createdAt','desc')));s.forEach(d=>acts.push({...d.data(),id:d.id,gName:g.name}))}
+  acts.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));acts=acts.slice(0,10);
+  const aEl=document.getElementById('home-acts');
+  if(!acts.length){aEl.innerHTML='<div class="empty"><div class="empty-ico">📭</div><div class="empty-t">Nessuna attività</div></div>';return}
+  aEl.innerHTML=acts.map(a=>{const p=a.amount/((a.members||[]).length||1),mine=a.paidBy===me.uid,b=mine?p*((a.members||[]).filter(m=>m!==me.uid).length):-p;return`<div class="arow"><div class="arow-ico">${a.category||'💳'}</div><div class="arow-inf"><div class="arow-t">${a.title}</div><div class="arow-s">${a.gName}</div></div><div class="arow-amt ${b>=0?'cg':'cr'}">${mine?'+':'-'}${eur(Math.abs(p))}</div></div>`}).join('');
 };
 
-// ── GROUPS SUBSCRIPTION ──
-const subscribeGroups = () => {
-  const q = query(collection(db,'groups'), where('members','array-contains', currentUser.uid));
-  const unsub = onSnapshot(q, snap => {
-    myGroups = snap.docs.map(d=>({id:d.id,...d.data()}));
-    renderSidebarGroups();
-    renderDashboard();
-  });
-  unsubscribers.push(unsub);
+const renderGroupsList=()=>{
+  const el=document.getElementById('groups-list');
+  if(!myGroups.length){el.innerHTML='<div class="card"><div class="empty"><div class="empty-ico">📂</div><div class="empty-t">Nessun conto</div></div></div>';return}
+  el.innerHTML='<div class="card">'+myGroups.map(g=>`<div class="grow" onclick="openGroup('${g.id}')"><div class="grow-em">${g.emoji||'📂'}</div><div class="grow-inf"><div class="grow-name">${g.name}</div><div class="grow-sub">${(g.members||[]).length} membri · ${g.currency||'€'}</div></div><span style="color:var(--t3);font-size:18px">›</span></div>`).join('')+'</div>';
 };
 
-const renderSidebarGroups = () => {
-  const el = document.getElementById('sidebar-groups');
-  if(!myGroups.length) { el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 12px;">Nessun conto ancora</div>'; return; }
-  el.innerHTML = myGroups.map(g=>`
-    <div class="group-item ${activeGroup&&activeGroup.id===g.id?'active':''}" onclick="openGroup('${g.id}')">
-      <div class="group-avatar">${g.emoji||'📂'}</div>
-      <span style="flex:1;truncate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</span>
-    </div>`).join('');
+window.createGroup=async()=>{
+  const name=document.getElementById('ng-name').value.trim(),emoji=document.getElementById('ng-cat').value,desc=document.getElementById('ng-desc').value.trim(),currency=document.getElementById('ng-cur').value;
+  if(!name)return toast('Inserisci il nome del conto','err');
+  try{const ref=await addDoc(collection(db,'groups'),{name,emoji,description:desc,currency,members:[me.uid],memberNames:[myProfile.name],createdBy:me.uid,createdAt:serverTimestamp()});closeM('modal-new-group');document.getElementById('ng-name').value='';toast('Conto creato!','ok');openGroup(ref.id)}
+  catch(e){toast('Errore: '+e.message,'err')}
 };
 
-// ── DASHBOARD ──
-window.renderDashboard = async () => {
-  renderGroupsOverview();
-  await calculateTotals();
-  await renderFriendBalances();
-  await renderRecentActivity();
+window.openGroup=async(id)=>{
+  activeGroup=myGroups.find(g=>g.id===id);
+  if(!activeGroup){const s=await getDoc(doc(db,'groups',id));if(!s.exists())return toast('Non trovato','err');activeGroup={id:s.id,...s.data()}}
+  document.getElementById('gd-em').textContent=activeGroup.emoji||'📂';
+  document.getElementById('gd-name').textContent=activeGroup.name;
+  document.getElementById('gd-meta').textContent=(activeGroup.members||[]).length+' membri · '+(activeGroup.currency||'€');
+  showPage('group-detail');gdTab('expenses');
 };
 
-const renderGroupsOverview = () => {
-  const el = document.getElementById('groups-overview');
-  if(!myGroups.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📂</div><div class="empty-title">Nessun conto</div><div class="empty-sub">Crea un conto per iniziare</div></div>'; return; }
-  el.innerHTML = myGroups.slice(0,4).map(g=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openGroup('${g.id}')">
-      <span style="font-size:22px">${g.emoji||'📂'}</span>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:500">${g.name}</div>
-        <div style="font-size:12px;color:var(--text2)">${g.memberNames?g.memberNames.join(', ').slice(0,30)+'...':'—'}</div>
-      </div>
-      <div style="font-size:11px;color:var(--text3)">›</div>
-    </div>`).join('');
-};
-
-const calculateTotals = async () => {
-  let totalCredits = 0, totalDebits = 0;
-  for(const g of myGroups) {
-    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), where('settled','==',false)));
-    eSnap.forEach(ed => {
-      const e = ed.data();
-      const perPerson = e.amount / (e.members?.length||1);
-      if(e.paidBy===currentUser.uid) {
-        const others = (e.members||[]).filter(m=>m!==currentUser.uid);
-        totalCredits += perPerson * others.length;
-      } else if((e.members||[]).includes(currentUser.uid)) {
-        totalDebits += perPerson;
-      }
-    });
-  }
-  const net = totalCredits - totalDebits;
-  document.getElementById('stat-credits').textContent = fmtAmt(totalCredits);
-  document.getElementById('stat-debits').textContent = fmtAmt(totalDebits);
-  document.getElementById('stat-net').textContent = (net>=0?'+':'')+fmtAmt(net);
-  document.getElementById('stat-net').style.color = net>=0 ? 'var(--accent3)' : 'var(--accent2)';
-};
-
-const renderRecentActivity = async () => {
-  const el = document.getElementById('recent-activity');
-  let activities = [];
-  for(const g of myGroups) {
-    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), orderBy('createdAt','desc')));
-    eSnap.forEach(ed => activities.push({...ed.data(), id:ed.id, groupName:g.name, groupId:g.id}));
-  }
-  activities.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-  activities = activities.slice(0,8);
-  if(!activities.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Nessuna attività</div><div class="empty-sub">Le spese appariranno qui</div></div>'; return; }
-  el.innerHTML = activities.map(a=>{
-    const perP = a.amount/(a.members?.length||1);
-    const isMine = a.paidBy===currentUser.uid;
-    const isInvolved = (a.members||[]).includes(currentUser.uid);
-    const balance = isMine ? perP*((a.members||[]).filter(m=>m!==currentUser.uid).length) : isInvolved ? -perP : 0;
-    return `<div class="activity-item">
-      <div class="activity-icon">${a.category||'💳'}</div>
-      <div class="activity-meta">
-        <div class="activity-title">${a.title}</div>
-        <div class="activity-sub">${a.groupName} · ${ts2date(a.createdAt)}</div>
-      </div>
-      <div class="activity-amount ${balance>0?'amount-pos':balance<0?'amount-neg':'amount-neutral'}">${fmtAmt(a.amount)}</div>
-    </div>`;
-  }).join('');
-};
-
-const renderFriendBalances = async () => {
-  const el = document.getElementById('friend-balances');
-  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
-  const uData = uSnap.data()||{};
-  const friendIds = uData.friends||[];
-  if(!friendIds.length) { el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div><div class="empty-sub">Aggiungi amici per vedere i bilanci</div></div>'; return; }
-  const balances = {};
-  friendIds.forEach(fid=>balances[fid]=0);
-  for(const g of myGroups) {
-    const eSnap = await getDocs(query(collection(db,'groups',g.id,'expenses'), where('settled','==',false)));
-    eSnap.forEach(ed=>{
-      const e = ed.data();
-      const per = e.amount/(e.members?.length||1);
-      if(e.paidBy===currentUser.uid) {
-        (e.members||[]).filter(m=>friendIds.includes(m)).forEach(m=>balances[m]=((balances[m]||0)+per));
-      } else if((e.members||[]).includes(currentUser.uid) && friendIds.includes(e.paidBy)) {
-        balances[e.paidBy]=((balances[e.paidBy]||0)-per);
-      }
-    });
-  }
-  const friendsData = await Promise.all(friendIds.map(async fid=>{
-    const s = await getDoc(doc(db,'users',fid)); return s.exists()?{id:fid,...s.data()}:null;
-  }));
-  const valid = friendsData.filter(Boolean);
-  if(!valid.length) { el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div></div>'; return; }
-  el.innerHTML = valid.map(f=>{
-    const b = balances[f.id]||0;
-    return `<div class="friend-item">
-      <div class="avatar sm">${initials(f.name)}</div>
-      <div class="friend-info">
-        <div class="friend-name">${f.name}</div>
-        <div class="friend-handle">@${f.username}</div>
-      </div>
-      <div class="friend-balance">
-        <div class="balance-label">${b>=0?'ti deve':'devi'}</div>
-        <div class="balance-amount ${b>=0?'amount-pos':'amount-neg'}">${fmtAmt(Math.abs(b))}</div>
-      </div>
-      ${Math.abs(b)>0.01?`<button class="btn-settle" onclick="openSettle('${f.id}','${f.name}',${b.toFixed(2)})">Salda</button>`:''}
-    </div>`;
-  }).join('');
-};
-
-// ── GROUPS ──
-window.createGroup = async () => {
-  const name = document.getElementById('new-group-name').value.trim();
-  const emoji = document.getElementById('new-group-category').value;
-  const desc = document.getElementById('new-group-desc').value.trim();
-  const currency = document.getElementById('new-group-currency').value;
-  if(!name) return toast('Inserisci il nome del conto','error');
-  try {
-    const gRef = await addDoc(collection(db,'groups'),{
-      name, emoji, description:desc, currency,
-      members:[currentUser.uid], memberNames:[userProfile.name],
-      createdBy:currentUser.uid, createdAt:serverTimestamp()
-    });
-    await addDoc(collection(db,'groups',gRef.id,'activity'),{
-      type:'group_created', text:`${userProfile.name} ha creato il conto`, uid:currentUser.uid,
-      createdAt:serverTimestamp()
-    });
-    closeModal('modal-new-group');
-    document.getElementById('new-group-name').value='';
-    toast('Conto creato con successo!','success');
-    openGroup(gRef.id);
-  } catch(e) { toast('Errore: '+e.message,'error'); }
-};
-
-window.openGroup = async (groupId) => {
-  activeGroup = myGroups.find(g=>g.id===groupId);
-  if(!activeGroup) {
-    const snap = await getDoc(doc(db,'groups',groupId));
-    if(!snap.exists()) return toast('Conto non trovato','error');
-    activeGroup = {id:snap.id,...snap.data()};
-  }
-  renderSidebarGroups();
-  document.getElementById('gd-emoji').textContent = activeGroup.emoji||'📂';
-  document.getElementById('gd-name').textContent = activeGroup.name;
-  document.getElementById('gd-breadcrumb').textContent = activeGroup.name;
-  document.getElementById('gd-members-count').textContent = (activeGroup.members||[]).length + ' membri';
-  showPage('group-detail');
-  switchGroupTab('expenses');
-  loadGroupExpenses();
-};
-
-window.switchGroupTab = (tab) => {
-  currentGroupTab = tab;
-  ['expenses','members','balances','notes'].forEach(t=>{
-    const el = document.getElementById('gd-'+t); if(el) el.style.display='none';
-  });
+window.gdTab=(tab)=>{
+  ['expenses','members','balances','notes'].forEach(t=>{const el=document.getElementById('gd-'+t);if(el)el.style.display='none'});
   document.getElementById('gd-'+tab).style.display='';
-  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-    b.classList.toggle('active', ['expenses','members','balances','notes'][i]===tab);
-  });
-  if(tab==='expenses') loadGroupExpenses();
-  if(tab==='members') loadGroupMembers();
-  if(tab==='balances') loadGroupBalances();
-  if(tab==='notes') loadGroupNotes();
+  document.querySelectorAll('#page-group-detail .tab').forEach((b,i)=>b.classList.toggle('on',['expenses','members','balances','notes'][i]===tab));
+  if(tab==='expenses')loadGdExp();if(tab==='members')loadGdMem();if(tab==='balances')loadGdBal();if(tab==='notes')loadGdNotes();
 };
 
-const loadGroupExpenses = async () => {
-  if(!activeGroup) return;
-  const el = document.getElementById('gd-expense-list');
-  el.innerHTML='<div style="text-align:center;padding:20px"><div class="loader" style="margin:0 auto"></div></div>';
-  try {
-    const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), orderBy('date','desc')));
-    if(snap.empty) { el.innerHTML='<div class="empty"><div class="empty-icon">💳</div><div class="empty-title">Nessuna spesa</div><div class="empty-sub">Aggiungi la prima spesa al conto</div></div>'; return; }
-    const membersSnap = await Promise.all((activeGroup.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
-    const memberMap = {};
-    membersSnap.forEach(s=>{ if(s.exists()) memberMap[s.id]=s.data().name; });
-    const per = snap.docs.length ? 1/(activeGroup.members||[]).length : 1;
-    el.innerHTML = snap.docs.map(d=>{
-      const e = {id:d.id,...d.data()};
-      const payerName = memberMap[e.paidBy]||'?';
-      const isMine = e.paidBy===currentUser.uid;
-      const share = e.amount/(e.members?.length||1);
-      const myShare = isMine ? share*((e.members||[]).filter(m=>m!==currentUser.uid).length) : -(share);
-      return `<div class="expense-item" onclick="showExpenseDetail('${e.id}')">
-        <div class="expense-date">${e.date?e.date.split('-').slice(1).join('/'):ts2date(e.createdAt)}</div>
-        <div class="expense-info">
-          <div class="expense-title">${e.category||'💳'} ${e.title}</div>
-          <div class="expense-payer">Pagato da ${payerName}${e.note?' · '+e.note:''}</div>
-        </div>
-        <div class="expense-amounts">
-          <div class="expense-total">${fmtAmt(e.amount)}</div>
-          <div class="expense-share ${myShare>=0?'amount-pos':'amount-neg'}">${isMine?'hai anticipato':'la tua parte'} ${fmtAmt(Math.abs(share))}</div>
-        </div>
-        ${e.settled?'<span class="chip green">✓</span>':''}
-      </div>`;
+const loadGdExp=async()=>{
+  const el=document.getElementById('gd-exp-list');el.innerHTML='<div class="spin"></div>';if(!activeGroup)return;
+  try{
+    const snap=await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'),orderBy('date','desc')));
+    const mSnap=await Promise.all((activeGroup.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
+    const mMap={};mSnap.forEach(s=>{if(s.exists())mMap[s.id]=s.data().name});
+    if(snap.empty){el.innerHTML='<div class="empty"><div class="empty-ico">💳</div><div class="empty-t">Nessuna spesa</div></div>';return}
+    el.innerHTML=snap.docs.map(d=>{const e={id:d.id,...d.data()},{d:day,m:mon}=fmtDM(e.date),per=e.amount/((e.members||[]).length||1),mine=e.paidBy===me.uid;
+      return`<div class="erow"><div class="erow-date"><div class="erow-day">${day}</div><div class="erow-mon">${mon}</div></div><div class="erow-inf"><div class="erow-t">${e.category||'💳'} ${e.title}</div><div class="erow-s">Pagato da ${mMap[e.paidBy]||'?'}${e.note?' · '+e.note:''}</div></div><div class="erow-r"><div class="erow-tot">${eur(e.amount)}</div><div class="erow-shr ${mine?'cg':'cr'}">${mine?'anticipo':'quota'} ${eur(per)}</div>${e.settled?'<div style="margin-top:4px"><span class="chip-g">✓ Saldato</span></div>':''}</div></div>`
     }).join('');
-  } catch(e) { el.innerHTML='<div style="color:var(--accent2);padding:20px;text-align:center">Errore: '+e.message+'</div>'; }
+  }catch(e){el.innerHTML='<div style="color:var(--red);padding:20px;text-align:center">Errore: '+e.message+'</div>'}
 };
 
-window.showExpenseDetail = (id) => {/* detail view could be expanded */};
+const computeBal=async()=>{
+  const b={};(activeGroup?.members||[]).forEach(m=>b[m]=0);
+  const s=await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'),where('settled','==',false)));
+  s.forEach(d=>{const e=d.data(),p=e.amount/((e.members||[]).length||1);if(b[e.paidBy]!==undefined)b[e.paidBy]+=p*((e.members||[]).filter(m=>m!==e.paidBy).length);(e.members||[]).filter(m=>m!==e.paidBy).forEach(m=>{if(b[m]!==undefined)b[m]-=p})});
+  return b;
+};
 
-const loadGroupMembers = async () => {
-  if(!activeGroup) return;
-  const el = document.getElementById('gd-member-list');
-  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
-  const members = activeGroup.members||[];
-  const data = await Promise.all(members.map(uid=>getDoc(doc(db,'users',uid))));
-  const balances = await computeGroupBalances();
-  el.innerHTML = data.map(s=>{
-    if(!s.exists()) return '';
-    const u = s.data();
-    const b = balances[s.id]||0;
-    return `<div class="member-row">
-      <div class="avatar sm">${initials(u.name)}</div>
-      <div>
-        <div style="font-size:14px;font-weight:500">${u.name}</div>
-        <div class="member-role" style="font-family:'DM Mono',monospace">@${u.username}${s.id===activeGroup.createdBy?' · admin':''}</div>
-      </div>
-      <div class="member-balance-row ${b>=0?'amount-pos':'amount-neg'}">${b>=0?'credito':'debito'} ${fmtAmt(Math.abs(b))}</div>
-    </div>`;
-  }).join('');
-  // Invite pending
-  const invitesSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',activeGroup.id), where('status','==','pending')));
-  if(!invitesSnap.empty) {
-    el.innerHTML += '<div style="margin-top:16px;font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Inviti in attesa</div>';
-    invitesSnap.forEach(inv=>{
-      const i=inv.data();
-      el.innerHTML+=`<div class="invite-pending"><span>⏳</span><span style="font-size:13px;color:var(--text2)">${i.toEmail||i.toUsername} — in attesa</span></div>`;
-    });
+const loadGdMem=async()=>{
+  const el=document.getElementById('gd-mem-list');el.innerHTML='<div class="spin"></div>';if(!activeGroup)return;
+  const bals=await computeBal(),data=await Promise.all((activeGroup.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
+  el.innerHTML=data.filter(s=>s.exists()).map(s=>{const u=s.data(),b=bals[s.id]||0;return`<div class="mrow"><div class="av av40">${ini(u.name)}</div><div class="mrow-inf"><div class="mrow-name">${u.name}${s.id===activeGroup.createdBy?' <span style="font-size:10px;color:var(--gold)">admin</span>':''}</div><div class="mrow-handle">@${u.username}</div></div><div class="${b>=0?'cg':'cr'}" style="font-family:'DM Mono',monospace;font-size:13px">${b>=0?'+':''} ${eur(b)}</div></div>`}).join('');
+  const iSnap=await getDocs(query(collection(db,'invites'),where('groupId','==',activeGroup.id),where('status','==','pending')));
+  if(!iSnap.empty){el.innerHTML+=`<div style="padding:14px 18px;border-top:1px solid var(--border)"><div class="fl" style="margin-bottom:10px">Inviti in attesa</div>`;iSnap.forEach(d=>{const i=d.data();el.innerHTML+=`<div class="ipend">⏳ ${i.toEmail||i.toUsername||'Utente'} — in attesa</div>`});el.innerHTML+='</div>'}
+};
+
+const loadGdBal=async()=>{
+  const el=document.getElementById('gd-bal-list');el.innerHTML='<div class="spin"></div>';
+  const bals=await computeBal(),data=await Promise.all(Object.keys(bals).map(uid=>getDoc(doc(db,'users',uid))));
+  const nm={};data.forEach(s=>{if(s.exists())nm[s.id]=s.data().name});
+  el.innerHTML=Object.entries(bals).sort((a,b)=>b[1]-a[1]).map(([uid,b])=>`<div class="brow"><div class="av av40">${ini(nm[uid]||'?')}</div><div class="brow-inf"><div class="brow-name">${nm[uid]||'?'}</div><div class="bbar"><div class="bbar-fill" style="width:${Math.min(100,Math.abs(b)*5)}%;background:${b>=0?'linear-gradient(90deg,var(--green),#00c870)':'linear-gradient(90deg,var(--red),#ff4040)'}"></div></div></div><div class="brow-r"><div class="brow-amt ${b>=0?'cg':'cr'}">${b>=0?'+':''} ${eur(b)}</div><div class="brow-lbl">${b>=0?'riceve':'deve'}</div>${uid!==me.uid&&Math.abs(b)>0.01?`<button class="btn-settle" onclick="openSettle('${uid}','${(nm[uid]||'').replace(/'/g,"\\'")}',${(-b).toFixed(2)})">Salda</button>`:''}</div></div>`).join('');
+};
+
+const loadGdNotes=async()=>{
+  const el=document.getElementById('gd-note-list');el.innerHTML='<div class="spin"></div>';if(!activeGroup)return;
+  const s=await getDocs(query(collection(db,'groups',activeGroup.id,'notes'),orderBy('createdAt','desc')));
+  if(s.empty){el.innerHTML='<div class="card"><div class="empty"><div class="empty-ico">📝</div><div class="empty-t">Nessuna nota</div></div></div>';return}
+  el.innerHTML=s.docs.map(d=>{const n=d.data(),canDel=n.authorId===me.uid;return`<div class="note"><div class="note-top"><div class="note-auth">${n.authorName||'?'}</div><div style="display:flex;align-items:center;gap:8px"><div class="note-time">${fmtTs(n.createdAt)}</div>${canDel?`<button class="note-del" onclick="deleteNote('${d.id}')">🗑</button>`:''}</div></div><div class="note-txt">${n.text}</div></div>`}).join('');
+};
+
+window.deleteNote=async(id)=>{if(!activeGroup)return;await deleteDoc(doc(db,'groups',activeGroup.id,'notes',id));toast('Nota eliminata','ok');loadGdNotes()};
+
+// EXPENSE
+const prepExp=()=>{
+  const gSel=document.getElementById('ex-group');
+  gSel.innerHTML=myGroups.map(g=>`<option value="${g.id}" ${activeGroup&&g.id===activeGroup.id?'selected':''}>${g.emoji||'📂'} ${g.name}</option>`).join('');
+  if(gSel.value)populatePayer(gSel.value);
+};
+
+window.populatePayer=async(gid)=>{
+  const g=myGroups.find(x=>x.id===gid)||activeGroup;if(!g)return;
+  const pSel=document.getElementById('ex-payer');
+  const data=await Promise.all((g.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
+  pSel.innerHTML=data.map(s=>`<option value="${s.id}" ${s.id===me.uid?'selected':''}>${s.exists()?s.data().name:'?'}</option>`).join('');
+};
+
+window.setSplit=(t)=>{splitType=t;document.querySelectorAll('.so').forEach((b,i)=>b.classList.toggle('on',['equal','percentage','custom'][i]===t))};
+window.openExpenseModal=()=>{prepExp();openM('modal-add-expense')};
+
+window.addExpense=async()=>{
+  const title=document.getElementById('ex-title').value.trim(),amount=parseFloat(document.getElementById('ex-amount').value),groupId=document.getElementById('ex-group').value,paidBy=document.getElementById('ex-payer').value,category=document.getElementById('ex-cat').value,date=document.getElementById('ex-date').value,note=document.getElementById('ex-note').value.trim();
+  if(!title)return toast('Inserisci una descrizione','err');
+  if(!amount||amount<=0)return toast('Importo non valido','err');
+  if(!groupId)return toast('Seleziona un conto','err');
+  const g=myGroups.find(x=>x.id===groupId)||activeGroup,members=g?.members||[];
+  try{
+    await addDoc(collection(db,'groups',groupId,'expenses'),{title,amount,paidBy,category,date,note,members,groupId,splitType,settled:false,createdBy:me.uid,createdAt:serverTimestamp()});
+    await pushNotif(members.filter(m=>m!==me.uid),{type:'expense',text:`${myProfile.name} ha aggiunto "${title}" (${eur(amount)}) nel conto ${g?.name}`,groupId,createdAt:serverTimestamp()});
+    closeM('modal-add-expense');document.getElementById('ex-title').value='';document.getElementById('ex-amount').value='';
+    toast('Spesa aggiunta!','ok');
+    if(activeGroup?.id===groupId)loadGdExp();renderHome();
+  }catch(e){toast('Errore: '+e.message,'err')}
+};
+
+// NOTES
+window.openNoteModal=()=>{if(!activeGroup)return;openM('modal-note')};
+window.addNote=async()=>{
+  const text=document.getElementById('note-txt').value.trim();if(!text||!activeGroup)return;
+  await addDoc(collection(db,'groups',activeGroup.id,'notes'),{text,authorId:me.uid,authorName:myProfile.name,createdAt:serverTimestamp()});
+  document.getElementById('note-txt').value='';closeM('modal-note');toast('Nota aggiunta!','ok');loadGdNotes();
+};
+
+// INVITE
+window.openInviteModal=async()=>{
+  if(!activeGroup)return;
+  document.getElementById('inv-input').value='';document.getElementById('inv-result').innerHTML='';
+  const uSnap=await getDoc(doc(db,'users',me.uid)),fids=(uSnap.data()?.friends||[]);
+  const listEl=document.getElementById('inv-friends');
+  if(!fids.length){listEl.innerHTML='<div style="font-size:13px;color:var(--t3)">Nessun amico disponibile</div>';openM('modal-invite');return}
+  const fData=await Promise.all(fids.map(fid=>getDoc(doc(db,'users',fid))));
+  const avail=fData.filter(s=>s.exists()&&!(activeGroup.members||[]).includes(s.id));
+  if(!avail.length){listEl.innerHTML='<div style="font-size:13px;color:var(--t3)">Tutti i tuoi amici sono già nel conto</div>';openM('modal-invite');return}
+  listEl.innerHTML='<div class="fl" style="margin-bottom:10px">I tuoi amici</div>'+avail.map(s=>`<div class="frow"><div class="av av40">${ini(s.data().name)}</div><div class="frow-inf"><div class="frow-name">${s.data().name}</div><div class="frow-handle">@${s.data().username}</div></div><button class="btn-acc" onclick="inviteUser('${s.id}','${s.data().name.replace(/'/g,"\\'")}')">Invita</button></div>`).join('');
+  openM('modal-invite');
+};
+
+window.searchInvite=async(val)=>{
+  val=val.trim().toLowerCase();const res=document.getElementById('inv-result');if(val.length<3){res.innerHTML='';return}
+  const q=val.includes('@')?query(collection(db,'users'),where('email','==',val)):query(collection(db,'users'),where('username','==',val));
+  const snap=await getDocs(q);if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--t3);padding:8px 0">Nessun utente trovato</div>';return}
+  snap.forEach(s=>{const u=s.data(),in_=(activeGroup?.members||[]).includes(s.id);res.innerHTML=`<div class="frow" style="background:var(--card2);border-radius:var(--r-sm);padding:12px"><div class="av av40">${ini(u.name)}</div><div class="frow-inf"><div class="frow-name">${u.name}</div><div class="frow-handle">@${u.username}</div></div>${in_?'<span class="chip-g">✓ Membro</span>':`<button class="btn-acc" onclick="inviteUser('${s.id}','${u.name.replace(/'/g,"\\'")}')">Invita</button>`}</div>`});
+};
+
+window.inviteUser=async(uid,name)=>{
+  if(!activeGroup)return;
+  if((activeGroup.members||[]).includes(uid))return toast('Già membro','inf');
+  const iSnap=await getDocs(query(collection(db,'invites'),where('groupId','==',activeGroup.id),where('toUid','==',uid),where('status','==','pending')));
+  if(!iSnap.empty)return toast('Invito già inviato','inf');
+  await addDoc(collection(db,'invites'),{groupId:activeGroup.id,groupName:activeGroup.name,groupEmoji:activeGroup.emoji||'📂',fromUid:me.uid,fromName:myProfile.name,toUid:uid,status:'pending',createdAt:serverTimestamp()});
+  await pushNotif([uid],{type:'invite',text:`${myProfile.name} ti ha invitato nel conto "${activeGroup.name}"`,groupId:activeGroup.id,inviteAction:true,createdAt:serverTimestamp()});
+  toast(`Invito inviato a ${name}!`,'ok');
+};
+
+// FRIENDS
+window.friendsTab=(t)=>{friendTab=t;document.querySelectorAll('#page-friends .tab').forEach((b,i)=>b.classList.toggle('on',['friends','requests','sent'][i]===t));loadFriends()};
+
+window.loadFriends=async()=>{
+  const el=document.getElementById('friends-list');el.innerHTML='<div class="spin"></div>';
+  const uSnap=await getDoc(doc(db,'users',me.uid)),u=uSnap.data()||{};
+  if(friendTab==='friends'){
+    const ids=u.friends||[];document.getElementById('ps-friends').textContent=ids.length;
+    if(!ids.length){el.innerHTML='<div class="empty"><div class="empty-ico">👥</div><div class="empty-t">Nessun amico</div><div class="empty-s">Aggiungili tramite username o email</div></div>';return}
+    const data=await Promise.all(ids.map(id=>getDoc(doc(db,'users',id))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`<div class="frow"><div class="av av40">${ini(s.data().name)}</div><div class="frow-inf"><div class="frow-name">${s.data().name}</div><div class="frow-handle">@${s.data().username}</div></div><button onclick="removeFriend('${s.id}','${s.data().name.replace(/'/g,"\\'")}');event.stopPropagation()" style="background:none;border:none;color:var(--t3);font-size:20px;cursor:pointer;padding:4px;line-height:1">×</button></div>`).join('');
+  }else if(friendTab==='requests'){
+    const ids=u.friendRequests||[];document.getElementById('req-badge').textContent=ids.length?`(${ids.length})`:'';document.getElementById('badge-fr').textContent=ids.length||'';document.getElementById('badge-fr').style.display=ids.length?'flex':'none';
+    if(!ids.length){el.innerHTML='<div class="empty"><div class="empty-ico">📬</div><div class="empty-t">Nessuna richiesta</div></div>';return}
+    const data=await Promise.all(ids.map(id=>getDoc(doc(db,'users',id))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`<div class="frow"><div class="av av40">${ini(s.data().name)}</div><div class="frow-inf"><div class="frow-name">${s.data().name}</div><div class="frow-handle">@${s.data().username}</div></div><div style="display:flex;gap:6px"><button class="btn-acc" onclick="acceptFriend('${s.id}','${s.data().name.replace(/'/g,"\\'")}')">✓</button><button onclick="declineFriend('${s.id}')" style="padding:8px 10px;background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);border-radius:var(--r-xs);color:var(--red);cursor:pointer;font-size:13px">✕</button></div></div>`).join('');
+  }else{
+    const ids=u.sentRequests||[];if(!ids.length){el.innerHTML='<div class="empty"><div class="empty-ico">📤</div><div class="empty-t">Nessun invito inviato</div></div>';return}
+    const data=await Promise.all(ids.map(id=>getDoc(doc(db,'users',id))));
+    el.innerHTML=data.filter(s=>s.exists()).map(s=>`<div class="frow"><div class="av av40">${ini(s.data().name)}</div><div class="frow-inf"><div class="frow-name">${s.data().name}</div><div class="frow-handle">@${s.data().username}</div></div><span class="chip-gray">⏳ In attesa</span></div>`).join('');
   }
 };
 
-const computeGroupBalances = async () => {
-  if(!activeGroup) return {};
-  const balances = {};
-  (activeGroup.members||[]).forEach(m=>balances[m]=0);
-  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), where('settled','==',false)));
-  snap.forEach(d=>{
-    const e=d.data();
-    const per=e.amount/(e.members?.length||1);
-    if(balances[e.paidBy]!==undefined) balances[e.paidBy]+=(per*(e.members?.length-1||0));
-    (e.members||[]).filter(m=>m!==e.paidBy).forEach(m=>{ if(balances[m]!==undefined) balances[m]-=per; });
-  });
-  return balances;
-};
-
-const loadGroupBalances = async () => {
-  const el = document.getElementById('gd-balance-list');
-  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
-  const balances = await computeGroupBalances();
-  const data = await Promise.all(Object.keys(balances).map(uid=>getDoc(doc(db,'users',uid))));
-  const nameMap={};
-  data.forEach(s=>{if(s.exists())nameMap[s.id]=s.data().name;});
-  const entries = Object.entries(balances).sort((a,b)=>b[1]-a[1]);
-  el.innerHTML = entries.map(([uid,bal])=>`
-    <div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)">
-      <div class="avatar sm">${initials(nameMap[uid]||'?')}</div>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:500">${nameMap[uid]||'?'}</div>
-        <div class="balance-bar" style="width:200px"><div class="balance-fill" style="width:${Math.min(100,Math.abs(bal/20)*100)}%;background:${bal>=0?'linear-gradient(90deg,var(--accent3),#00e87a)':'linear-gradient(90deg,var(--accent2),#ff4040)'}"></div></div>
-      </div>
-      <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:500;${bal>=0?'color:var(--accent3)':'color:var(--accent2)'}">
-        ${bal>=0?'riceve':'deve'} ${fmtAmt(Math.abs(bal))}
-      </div>
-      ${uid!==currentUser.uid && Math.abs(bal)>0.01?`<button class="btn-settle" onclick="openSettle('${uid}','${nameMap[uid]||'?'}',${(-bal).toFixed(2)})">Salda</button>`:''}
-    </div>`).join('');
-};
-
-const loadGroupNotes = async () => {
-  if(!activeGroup) return;
-  const el = document.getElementById('gd-note-list');
-  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
-  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'notes'), orderBy('createdAt','desc')));
-  if(snap.empty) { el.innerHTML='<div class="empty"><div class="empty-icon">📝</div><div class="empty-title">Nessuna nota</div><div class="empty-sub">Aggiungi note allo storico del conto</div></div>'; return; }
-  el.innerHTML = snap.docs.map(d=>{
-    const n=d.data();
-    return `<div class="note-item">
-      <div class="note-header">
-        <div class="note-author">${n.authorName||'?'}</div>
-        <div class="note-time">${tsShort(n.createdAt)}</div>
-      </div>
-      <div class="note-text">${n.text}</div>
-    </div>`;
-  }).join('');
-};
-
-// ── EXPENSE ──
-window.setSplitType = (type) => {
-  splitType = type;
-  document.querySelectorAll('.split-opt').forEach(b=>b.classList.remove('active'));
-  const opts = ['equal','percentage','custom'];
-  document.querySelectorAll('.split-opt')[opts.indexOf(type)]?.classList.add('active');
-};
-
-window.openExpenseModal = () => {
-  if(!activeGroup) return;
-  const gSel = document.getElementById('exp-group');
-  gSel.innerHTML = myGroups.map(g=>`<option value="${g.id}" ${g.id===activeGroup.id?'selected':''}>${g.emoji} ${g.name}</option>`).join('');
-  populatePayerSelect(activeGroup.id);
-  openModal('modal-add-expense');
-};
-
-const populatePayerSelect = async (groupId) => {
-  const g = myGroups.find(x=>x.id===groupId)||activeGroup;
-  if(!g) return;
-  const pSel = document.getElementById('exp-payer');
-  const data = await Promise.all((g.members||[]).map(uid=>getDoc(doc(db,'users',uid))));
-  pSel.innerHTML = data.map(s=>`<option value="${s.id}" ${s.id===currentUser.uid?'selected':''}>${s.exists()?s.data().name:'?'}</option>`).join('');
-};
-
-document.getElementById('exp-group')?.addEventListener('change', e=>populatePayerSelect(e.target.value));
-
-window.addExpense = async () => {
-  const title = document.getElementById('exp-title').value.trim();
-  const amount = parseFloat(document.getElementById('exp-amount').value);
-  const groupId = document.getElementById('exp-group').value;
-  const paidBy = document.getElementById('exp-payer').value;
-  const category = document.getElementById('exp-category').value;
-  const date = document.getElementById('exp-date').value;
-  const note = document.getElementById('exp-note').value.trim();
-  if(!title) return toast('Inserisci una descrizione','error');
-  if(!amount||amount<=0) return toast('Inserisci un importo valido','error');
-  if(!groupId) return toast('Seleziona un conto','error');
-  const g = myGroups.find(x=>x.id===groupId)||activeGroup;
-  const members = g.members||[];
-  try {
-    await addDoc(collection(db,'groups',groupId,'expenses'),{
-      title, amount, paidBy, category, date, note,
-      members, groupId, splitType, settled:false,
-      createdBy:currentUser.uid, createdAt:serverTimestamp()
-    });
-    await addNotification(members.filter(m=>m!==currentUser.uid), {
-      type:'expense', text:`${userProfile.name} ha aggiunto "${title}" (${fmtAmt(amount)}) nel conto ${g.name}`,
-      groupId, createdAt:serverTimestamp()
-    });
-    closeModal('modal-add-expense');
-    document.getElementById('exp-title').value='';
-    document.getElementById('exp-amount').value='';
-    toast('Spesa aggiunta!','success');
-    if(activeGroup?.id===groupId) loadGroupExpenses();
-    renderDashboard();
-  } catch(e) { toast('Errore: '+e.message,'error'); }
-};
-
-// ── NOTES ──
-window.openNoteModal = () => { if(!activeGroup) return; openModal('modal-add-note'); };
-window.addNote = async () => {
-  const text = document.getElementById('note-text').value.trim();
-  if(!text||!activeGroup) return;
-  await addDoc(collection(db,'groups',activeGroup.id,'notes'),{
-    text, authorId:currentUser.uid, authorName:userProfile.name,
-    createdAt:serverTimestamp()
-  });
-  document.getElementById('note-text').value='';
-  closeModal('modal-add-note');
-  toast('Nota aggiunta!','success');
-  loadGroupNotes();
-};
-
-// ── INVITE ──
-window.openInviteModal = async () => {
-  if(!activeGroup) return;
-  const listEl = document.getElementById('invite-friends-list');
-  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
-  const friendIds = uSnap.data()?.friends||[];
-  if(!friendIds.length) { listEl.innerHTML='<div style="font-size:13px;color:var(--text3)">Nessun amico da invitare. Aggiungi prima degli amici.</div>'; }
-  else {
-    const fData = await Promise.all(friendIds.map(fid=>getDoc(doc(db,'users',fid))));
-    const alreadyIn = activeGroup.members||[];
-    listEl.innerHTML = '<div class="form-label" style="margin-bottom:8px">Amici</div>' +
-      fData.filter(s=>s.exists()&&!alreadyIn.includes(s.id)).map(s=>`
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div class="avatar sm">${initials(s.data().name)}</div>
-          <div style="flex:1"><div style="font-size:14px">${s.data().name}</div><div style="font-size:11px;color:var(--text2)">@${s.data().username}</div></div>
-          <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="inviteUser('${s.id}','${s.data().name}')">Invita</button>
-        </div>`).join('');
-    if(!listEl.querySelectorAll('[onclick]').length) listEl.innerHTML='<div style="font-size:13px;color:var(--text3)">Tutti i tuoi amici sono già nel conto.</div>';
-  }
-  document.getElementById('invite-search-input').value='';
-  document.getElementById('invite-search-result').innerHTML='';
-  openModal('modal-invite-group');
-};
-
-document.getElementById('invite-search-input')?.addEventListener('input', async function(){
-  const val = this.value.trim().toLowerCase();
-  const res = document.getElementById('invite-search-result');
-  if(val.length<3){res.innerHTML='';return;}
-  const uq = val.includes('@') ? query(collection(db,'users'),where('email','==',val)) : query(collection(db,'users'),where('username','==',val));
-  const snap = await getDocs(uq);
-  if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--text3)">Nessun utente trovato</div>';return;}
-  snap.forEach(s=>{
-    const u=s.data();
-    const alreadyIn=(activeGroup?.members||[]).includes(s.id);
-    res.innerHTML=`<div style="display:flex;align-items:center;gap:12px;background:var(--surface2);padding:12px;border-radius:10px">
-      <div class="avatar sm">${initials(u.name)}</div>
-      <div style="flex:1"><div>${u.name}</div><div style="font-size:12px;color:var(--text2)">@${u.username}</div></div>
-      ${alreadyIn?'<span style="font-size:12px;color:var(--accent3)">✓ Già membro</span>':`<button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="inviteUser('${s.id}','${u.name}')">Invita</button>`}
-    </div>`;
-  });
-});
-
-window.inviteUser = async (uid, name) => {
-  if(!activeGroup) return;
-  if((activeGroup.members||[]).includes(uid)) return toast('Già membro del conto','info');
-  const invSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',activeGroup.id), where('toUid','==',uid), where('status','==','pending')));
-  if(!invSnap.empty) return toast('Invito già inviato','info');
-  await addDoc(collection(db,'invites'),{
-    groupId:activeGroup.id, groupName:activeGroup.name, groupEmoji:activeGroup.emoji||'📂',
-    fromUid:currentUser.uid, fromName:userProfile.name,
-    toUid:uid, status:'pending', createdAt:serverTimestamp()
-  });
-  await addNotification([uid],{
-    type:'invite', text:`${userProfile.name} ti ha invitato nel conto "${activeGroup.name}"`,
-    groupId:activeGroup.id, inviteAcceptAction:true, createdAt:serverTimestamp()
-  });
-  toast(`Invito inviato a ${name}!`,'success');
-};
-
-// ── FRIENDS ──
-window.switchFriendsTab = (tab) => {
-  currentFriendsTab = tab;
-  document.querySelectorAll('#page-friends .tab-btn').forEach((b,i)=>b.classList.toggle('active',['friends','requests','sent'][i]===tab));
-  loadFriendsPage();
-};
-
-window.loadFriendsPage = async () => {
-  const el = document.getElementById('friends-list');
-  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
-  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
-  const uData = uSnap.data()||{};
-  if(currentFriendsTab==='friends') {
-    const friends = uData.friends||[];
-    document.getElementById('ps-friends').textContent=friends.length;
-    if(!friends.length){el.innerHTML='<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">Nessun amico</div><div class="empty-sub">Aggiungi amici tramite username o email</div></div>';return;}
-    const data=await Promise.all(friends.map(fid=>getDoc(doc(db,'users',fid))));
-    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
-      <div class="friend-item">
-        <div class="avatar sm">${initials(s.data().name)}</div>
-        <div class="friend-info">
-          <div class="friend-name">${s.data().name}</div>
-          <div class="friend-handle">@${s.data().username}</div>
-        </div>
-        <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="removeFriend('${s.id}','${s.data().name}')">Rimuovi</button>
-      </div>`).join('');
-  } else if(currentFriendsTab==='requests') {
-    const reqs = uData.friendRequests||[];
-    document.getElementById('req-count').textContent=reqs.length?`(${reqs.length})`:'';
-    if(!reqs.length){el.innerHTML='<div class="empty"><div class="empty-icon">📬</div><div class="empty-title">Nessuna richiesta</div><div class="empty-sub">Nessuna richiesta di amicizia in arrivo</div></div>';return;}
-    const data=await Promise.all(reqs.map(uid=>getDoc(doc(db,'users',uid))));
-    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
-      <div class="friend-item">
-        <div class="avatar sm">${initials(s.data().name)}</div>
-        <div class="friend-info">
-          <div class="friend-name">${s.data().name}</div>
-          <div class="friend-handle">@${s.data().username}</div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="acceptFriend('${s.id}','${s.data().name}')">✓ Accetta</button>
-          <button class="btn-secondary" style="font-size:12px;padding:6px 12px" onclick="declineFriend('${s.id}')">✕</button>
-        </div>
-      </div>`).join('');
-  } else {
-    const sent = uData.sentRequests||[];
-    if(!sent.length){el.innerHTML='<div class="empty"><div class="empty-icon">📤</div><div class="empty-title">Nessun invito inviato</div></div>';return;}
-    const data=await Promise.all(sent.map(uid=>getDoc(doc(db,'users',uid))));
-    el.innerHTML=data.filter(s=>s.exists()).map(s=>`
-      <div class="friend-item">
-        <div class="avatar sm">${initials(s.data().name)}</div>
-        <div class="friend-info">
-          <div class="friend-name">${s.data().name}</div>
-          <div class="friend-handle">@${s.data().username}</div>
-        </div>
-        <span class="chip">⏳ In attesa</span>
-      </div>`).join('');
-  }
-};
-
-window.filterFriends = async (val) => { /* basic filter implemented via reload */ };
-
-window.searchAndAddFriend = async () => {
-  const val = document.getElementById('friend-search-input').value.trim().toLowerCase();
-  const res = document.getElementById('friend-search-result');
-  if(!val) return;
-  const q1 = val.includes('@')||val.includes('.') ? query(collection(db,'users'),where('email','==',val)) : query(collection(db,'users'),where('username','==',val));
-  const snap = await getDocs(q1);
-  if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--accent2)">Nessun utente trovato con questo username/email</div>';return;}
+window.searchFriend=async()=>{
+  const val=document.getElementById('af-input').value.trim().toLowerCase(),res=document.getElementById('af-result');if(!val)return;
+  const q=val.includes('@')||val.includes('.')?query(collection(db,'users'),where('email','==',val)):query(collection(db,'users'),where('username','==',val));
+  const snap=await getDocs(q);if(snap.empty){res.innerHTML='<div style="font-size:13px;color:var(--red);padding:8px 0">Nessun utente trovato</div>';return}
   snap.forEach(async s=>{
-    if(s.id===currentUser.uid){res.innerHTML='<div style="font-size:13px;color:var(--text2)">Non puoi aggiungere te stesso</div>';return;}
-    const uData=(await getDoc(doc(db,'users',currentUser.uid))).data()||{};
-    if((uData.friends||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--accent3)">✓ Siete già amici</div>';return;}
-    if((uData.sentRequests||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--text2)">Richiesta già inviata</div>';return;}
-    const u=s.data();
-    res.innerHTML=`<div style="background:var(--surface2);border-radius:10px;padding:12px;display:flex;align-items:center;gap:12px">
-      <div class="avatar sm">${initials(u.name)}</div>
-      <div style="flex:1"><div>${u.name}</div><div style="font-size:12px;color:var(--text2)">@${u.username}</div></div>
-      <button class="btn-accent" style="font-size:12px;padding:6px 12px" onclick="sendFriendRequest('${s.id}','${u.name}')">Invia richiesta</button>
-    </div>`;
+    if(s.id===me.uid){res.innerHTML='<div style="font-size:13px;color:var(--t2)">Non puoi aggiungere te stesso</div>';return}
+    const ud=(await getDoc(doc(db,'users',me.uid))).data()||{};
+    if((ud.friends||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--green)">✓ Siete già amici</div>';return}
+    if((ud.sentRequests||[]).includes(s.id)){res.innerHTML='<div style="font-size:13px;color:var(--t2)">Richiesta già inviata</div>';return}
+    const u=s.data();res.innerHTML=`<div class="frow" style="background:var(--card2);border-radius:var(--r-sm);padding:12px"><div class="av av40">${ini(u.name)}</div><div class="frow-inf"><div class="frow-name">${u.name}</div><div class="frow-handle">@${u.username}</div></div><button class="btn-acc" onclick="sendFriendReq('${s.id}','${u.name.replace(/'/g,"\\'")}')">Aggiungi</button></div>`;
   });
 };
 
-window.sendFriendRequest = async (toUid, toName) => {
-  await updateDoc(doc(db,'users',toUid),{friendRequests:arrayUnion(currentUser.uid)});
-  await updateDoc(doc(db,'users',currentUser.uid),{sentRequests:arrayUnion(toUid)});
-  await addNotification([toUid],{type:'friend_request',text:`${userProfile.name} ti ha inviato una richiesta di amicizia`,createdAt:serverTimestamp()});
-  toast(`Richiesta inviata a ${toName}!`,'success');
-  document.getElementById('friend-search-result').innerHTML='<div style="font-size:13px;color:var(--accent3)">✓ Richiesta inviata!</div>';
+window.sendFriendReq=async(toUid,name)=>{
+  await updateDoc(doc(db,'users',toUid),{friendRequests:arrayUnion(me.uid)});
+  await updateDoc(doc(db,'users',me.uid),{sentRequests:arrayUnion(toUid)});
+  await pushNotif([toUid],{type:'friend_request',text:`${myProfile.name} ti ha inviato una richiesta di amicizia`,createdAt:serverTimestamp()});
+  toast(`Richiesta inviata a ${name}!`,'ok');document.getElementById('af-result').innerHTML='<div style="font-size:13px;color:var(--green)">✓ Richiesta inviata!</div>';
 };
 
-window.acceptFriend = async (uid, name) => {
-  await updateDoc(doc(db,'users',currentUser.uid),{friends:arrayUnion(uid), friendRequests:arrayRemove(uid)});
-  await updateDoc(doc(db,'users',uid),{friends:arrayUnion(currentUser.uid), sentRequests:arrayRemove(currentUser.uid)});
-  await addNotification([uid],{type:'friend_accepted',text:`${userProfile.name} ha accettato la tua richiesta di amicizia`,createdAt:serverTimestamp()});
-  toast(`Sei ora amico di ${name}!`,'success');
-  loadFriendsPage();
+window.acceptFriend=async(uid,name)=>{
+  await updateDoc(doc(db,'users',me.uid),{friends:arrayUnion(uid),friendRequests:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{friends:arrayUnion(me.uid),sentRequests:arrayRemove(me.uid)});
+  await pushNotif([uid],{type:'friend_accepted',text:`${myProfile.name} ha accettato la tua richiesta`,createdAt:serverTimestamp()});
+  toast(`Ora sei amico di ${name}!`,'ok');loadFriends();
 };
 
-window.declineFriend = async (uid) => {
-  await updateDoc(doc(db,'users',currentUser.uid),{friendRequests:arrayRemove(uid)});
-  await updateDoc(doc(db,'users',uid),{sentRequests:arrayRemove(currentUser.uid)});
-  toast('Richiesta rifiutata','info');
-  loadFriendsPage();
+window.declineFriend=async(uid)=>{
+  await updateDoc(doc(db,'users',me.uid),{friendRequests:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{sentRequests:arrayRemove(me.uid)});
+  toast('Richiesta rifiutata','inf');loadFriends();
 };
 
-window.removeFriend = async (uid, name) => {
-  if(!confirm(`Rimuovere ${name} dagli amici?`)) return;
-  await updateDoc(doc(db,'users',currentUser.uid),{friends:arrayRemove(uid)});
-  await updateDoc(doc(db,'users',uid),{friends:arrayRemove(currentUser.uid)});
-  toast(`${name} rimosso dagli amici`,'info');
-  loadFriendsPage();
+window.removeFriend=async(uid,name)=>{
+  if(!confirm(`Rimuovere ${name} dagli amici?`))return;
+  await updateDoc(doc(db,'users',me.uid),{friends:arrayRemove(uid)});
+  await updateDoc(doc(db,'users',uid),{friends:arrayRemove(me.uid)});
+  toast(`${name} rimosso dagli amici`,'inf');loadFriends();
 };
 
-// ── SETTLE ──
-window.openSettle = (uid, name, amount) => {
-  settleData = {uid, name, amount:parseFloat(amount)};
-  const sign = settleData.amount;
-  document.getElementById('settle-text').innerHTML = sign>0
-    ? `<b>${name}</b> ti deve <span style="color:var(--accent3);font-family:'DM Mono',monospace">${fmtAmt(Math.abs(sign))}</span>`
-    : `Devi <span style="color:var(--accent2);font-family:'DM Mono',monospace">${fmtAmt(Math.abs(sign))}</span> a <b>${name}</b>`;
-  openModal('modal-settle');
+// SETTLE
+window.openSettle=(uid,name,amount)=>{
+  settleData={uid,name,amount:parseFloat(amount)};const s=settleData.amount;
+  document.getElementById('settle-txt').innerHTML=s>0?`<b>${name}</b> ti deve <span style="color:var(--green);font-family:'DM Mono',monospace">${eur(s)}</span>`:`Devi <span style="color:var(--red);font-family:'DM Mono',monospace">${eur(Math.abs(s))}</span> a <b>${name}</b>`;
+  openM('modal-settle');
 };
 
-window.confirmSettle = async () => {
-  if(!settleData||!activeGroup) return;
-  // Mark all unsettled expenses between these two as settled
-  const snap = await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'), where('settled','==',false)));
-  const batch = [];
-  snap.forEach(d=>{
-    const e=d.data();
-    if((e.paidBy===currentUser.uid&&(e.members||[]).includes(settleData.uid)) ||
-       (e.paidBy===settleData.uid&&(e.members||[]).includes(currentUser.uid))) {
-      batch.push(updateDoc(doc(db,'groups',activeGroup.id,'expenses',d.id),{settled:true}));
-    }
-  });
+window.confirmSettle=async()=>{
+  if(!settleData||!activeGroup)return;
+  const snap=await getDocs(query(collection(db,'groups',activeGroup.id,'expenses'),where('settled','==',false))),batch=[];
+  snap.forEach(d=>{const e=d.data();if((e.paidBy===me.uid&&(e.members||[]).includes(settleData.uid))||(e.paidBy===settleData.uid&&(e.members||[]).includes(me.uid)))batch.push(updateDoc(doc(db,'groups',activeGroup.id,'expenses',d.id),{settled:true}))});
   await Promise.all(batch);
-  await addNotification([settleData.uid],{type:'settle',text:`${userProfile.name} ha saldato il debito nel conto ${activeGroup.name}`,groupId:activeGroup.id,createdAt:serverTimestamp()});
-  closeModal('modal-settle');
-  toast('Debito saldato!','success');
-  loadGroupBalances();
-  renderDashboard();
+  await pushNotif([settleData.uid],{type:'settle',text:`${myProfile.name} ha saldato il debito in "${activeGroup.name}"`,groupId:activeGroup.id,createdAt:serverTimestamp()});
+  closeM('modal-settle');toast('Debito saldato!','ok');loadGdBal();renderHome();
 };
 
-// ── NOTIFICATIONS ──
-const addNotification = async (uids, data) => {
-  await Promise.all(uids.map(uid=>addDoc(collection(db,'users',uid,'notifications'),{...data,read:false})));
+// NOTIFS
+const pushNotif=async(uids,data)=>Promise.all(uids.map(uid=>addDoc(collection(db,'users',uid,'notifications'),{...data,read:false})));
+
+const subscribeNotifs=()=>{
+  const q=query(collection(db,'users',me.uid,'notifications'),orderBy('createdAt','desc'));
+  const u=onSnapshot(q,snap=>{
+    const n=snap.docs.filter(d=>!d.data().read).length;
+    document.getElementById('badge-no').textContent=n||'';document.getElementById('badge-no').style.display=n?'flex':'none';
+    document.getElementById('npip').style.display=n?'block':'none';
+  });unsubs.push(u);
 };
 
-const subscribeNotifications = () => {
-  const q = query(collection(db,'users',currentUser.uid,'notifications'), orderBy('createdAt','desc'));
-  const unsub = onSnapshot(q, snap=>{
-    const unread = snap.docs.filter(d=>!d.data().read).length;
-    const badge = document.getElementById('notif-badge');
-    badge.style.display = unread>0?'':'none';
-    badge.textContent = unread;
-    const friendReqs = snap.docs.filter(d=>d.data().type==='friend_request').length;
-    const fb = document.getElementById('friends-badge');
-    fb.style.display = friendReqs>0?'':'none';
-    fb.textContent = friendReqs;
-  });
-  unsubscribers.push(unsub);
+window.loadNotifs=async()=>{
+  const el=document.getElementById('notif-list');el.innerHTML='<div class="spin"></div>';
+  const snap=await getDocs(query(collection(db,'users',me.uid,'notifications'),orderBy('createdAt','desc')));
+  if(snap.empty){el.innerHTML='<div class="empty"><div class="empty-ico">🔔</div><div class="empty-t">Nessuna notifica</div></div>';return}
+  const ico={expense:'💳',invite:'📩',friend_request:'👥',friend_accepted:'✅',settle:'💚'};
+  el.innerHTML=snap.docs.map(d=>{const n=d.data();return`<div class="nrow" onclick="markRead('${d.id}')"><div class="ndot ${n.read?'read':''}"></div><div style="flex:1"><div class="nrow-txt">${ico[n.type]||'🔔'} ${n.text}</div><div class="nrow-time">${fmtTs(n.createdAt)}</div></div>${n.inviteAction&&!n.read?`<button class="btn-acc" onclick="acceptInvite('${n.groupId}','${d.id}');event.stopPropagation()">Accetta</button>`:''}</div>`}).join('');
 };
 
-window.loadNotificationsPage = async () => {
-  const el = document.getElementById('notif-list');
-  el.innerHTML='<div class="loader" style="margin:20px auto"></div>';
-  const snap = await getDocs(query(collection(db,'users',currentUser.uid,'notifications'), orderBy('createdAt','desc')));
-  if(snap.empty){el.innerHTML='<div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">Nessuna notifica</div><div class="empty-sub">Sei in pari con tutto!</div></div>';return;}
-  el.innerHTML=snap.docs.map(d=>{
-    const n=d.data();
-    const icons={expense:'💳',invite:'📩',friend_request:'👥',friend_accepted:'✅',settle:'💚',default:'🔔'};
-    return `<div class="notif-item" onclick="markRead('${d.id}')">
-      <div class="notif-dot ${n.read?'read':''}"></div>
-      <div class="notif-content">
-        <div class="notif-text">${icons[n.type]||'🔔'} ${n.text}</div>
-        <div class="notif-time">${tsShort(n.createdAt)}</div>
-      </div>
-      ${n.inviteAcceptAction&&!n.read?`<button class="btn-accent" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="acceptGroupInvite('${n.groupId}','${d.id}');event.stopPropagation()">Accetta</button>`:''}
-    </div>`;
-  }).join('');
+window.markRead=async(id)=>updateDoc(doc(db,'users',me.uid,'notifications',id),{read:true});
+window.markAllRead=async()=>{const s=await getDocs(collection(db,'users',me.uid,'notifications'));await Promise.all(s.docs.map(d=>updateDoc(d.ref,{read:true})));toast('Tutto letto','ok');loadNotifs()};
+
+window.acceptInvite=async(groupId,notifId)=>{
+  if(!groupId)return;
+  await updateDoc(doc(db,'groups',groupId),{members:arrayUnion(me.uid),memberNames:arrayUnion(myProfile.name)});
+  await updateDoc(doc(db,'users',me.uid,'notifications',notifId),{read:true,inviteAction:false});
+  const iSnap=await getDocs(query(collection(db,'invites'),where('groupId','==',groupId),where('toUid','==',me.uid)));
+  iSnap.forEach(d=>updateDoc(d.ref,{status:'accepted'}));
+  toast('Hai unito al conto!','ok');loadNotifs();
 };
 
-window.markRead = async (id) => {
-  await updateDoc(doc(db,'users',currentUser.uid,'notifications',id),{read:true});
+// PROFILE
+window.loadProfileStats=async()=>{
+  document.getElementById('ps-groups').textContent=myGroups.length;
+  const uSnap=await getDoc(doc(db,'users',me.uid));document.getElementById('ps-friends').textContent=(uSnap.data()?.friends||[]).length;
+  let n=0;for(const g of myGroups){const s=await getDocs(query(collection(db,'groups',g.id,'expenses'),where('paidBy','==',me.uid)));n+=s.size}
+  document.getElementById('ps-expenses').textContent=n;
 };
 
-window.markAllRead = async () => {
-  const snap = await getDocs(collection(db,'users',currentUser.uid,'notifications'));
-  await Promise.all(snap.docs.map(d=>updateDoc(d.ref,{read:true})));
-  toast('Tutte le notifiche segnate come lette','success');
-  loadNotificationsPage();
+window.saveProfile=async()=>{
+  const name=document.getElementById('edit-name').value.trim(),username=document.getElementById('edit-user').value.trim().toLowerCase();
+  if(!name||!username)return toast('Compila tutti i campi','err');
+  if(username!==myProfile.username){const q=query(collection(db,'users'),where('username','==',username));const s=await getDocs(q);if(!s.empty&&s.docs[0].id!==me.uid)return toast('Username già in uso','err')}
+  await updateDoc(doc(db,'users',me.uid),{name,username});myProfile.name=name;myProfile.username=username;setupTopbar();toast('Profilo aggiornato!','ok');
 };
 
-window.acceptGroupInvite = async (groupId, notifId) => {
-  if(!groupId) return;
-  await updateDoc(doc(db,'groups',groupId),{
-    members: arrayUnion(currentUser.uid),
-    memberNames: arrayUnion(userProfile.name)
-  });
-  await updateDoc(doc(db,'users',currentUser.uid,'notifications',notifId),{read:true, inviteAcceptAction:false});
-  const invSnap = await getDocs(query(collection(db,'invites'), where('groupId','==',groupId), where('toUid','==',currentUser.uid)));
-  invSnap.forEach(d=>updateDoc(d.ref,{status:'accepted'}));
-  toast('Hai unito al conto!','success');
-  loadNotificationsPage();
+window.changePassword=async()=>{
+  const np=document.getElementById('pw-new').value,cp=document.getElementById('pw-conf').value;
+  if(!np||np.length<6)return toast('Password troppo corta','err');
+  if(np!==cp)return toast('Le password non coincidono','err');
+  try{await updatePassword(me,np);toast('Password aggiornata!','ok');closeM('modal-chpw')}
+  catch(e){toast('Rieffettua il login e riprova','err')}
 };
-
-// ── PROFILE ──
-window.loadProfilePage = async () => {
-  document.getElementById('ps-groups').textContent = myGroups.length;
-  const uSnap = await getDoc(doc(db,'users',currentUser.uid));
-  const u = uSnap.data()||{};
-  document.getElementById('ps-friends').textContent = (u.friends||[]).length;
-  // Count expenses
-  let expCount=0;
-  for(const g of myGroups) {
-    const s=await getDocs(query(collection(db,'groups',g.id,'expenses'),where('paidBy','==',currentUser.uid)));
-    expCount+=s.size;
-  }
-  document.getElementById('ps-expenses').textContent = expCount;
-};
-
-window.saveProfile = async () => {
-  const name = document.getElementById('edit-name').value.trim();
-  const username = document.getElementById('edit-username').value.trim().toLowerCase();
-  if(!name||!username) return toast('Compila tutti i campi','error');
-  if(username!==userProfile.username) {
-    const uq=query(collection(db,'users'),where('username','==',username));
-    const s=await getDocs(uq);
-    if(!s.empty&&s.docs[0].id!==currentUser.uid) return toast('Username già in uso','error');
-  }
-  await updateDoc(doc(db,'users',currentUser.uid),{name,username});
-  userProfile.name=name; userProfile.username=username;
-  setupSidebar();
-  toast('Profilo aggiornato!','success');
-};
-
-window.changePassword = async () => {
-  const np=document.getElementById('new-pass').value;
-  const cp=document.getElementById('conf-pass').value;
-  if(!np||np.length<6) return toast('Password troppo corta (min 6 caratteri)','error');
-  if(np!==cp) return toast('Le password non coincidono','error');
-  try { await updatePassword(currentUser,np); toast('Password aggiornata!','success'); closeModal('modal-change-pass'); }
-  catch(e) { toast('Errore: rieffettua il login e riprova','error'); }
-};
-
-// ── SETUP GROUPS FOR EXPENSE MODAL ──
-window.openModal = (id) => {
-  if(id==='modal-add-expense' && myGroups.length) {
-    const gSel = document.getElementById('exp-group');
-    gSel.innerHTML = myGroups.map(g=>`<option value="${g.id}" ${activeGroup&&g.id===activeGroup.id?'selected':''}>${g.emoji} ${g.name}</option>`).join('');
-    populatePayerSelect(gSel.value);
-  }
-  document.getElementById(id).classList.add('open');
-};
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e=>{
-  if(e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
-});
 </script>
 </body>
 </html>
